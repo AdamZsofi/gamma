@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -35,6 +35,31 @@ class InternalEventHandler {
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	
 	//
+	
+	def void addInternalEventHandlingActions(XSTS xSts, Component component) {
+		if (component.asynchronous || // No signal manipulation for async components and ones with async parents (adapters)
+				(!component.top && component.parentComponent.asynchronous)) {
+			return
+		}
+		
+		val topInternalPorts = component.allInternalPorts.filter[it.topComponentPort].toList
+		xSts.addInternalEventHandlingActions(topInternalPorts)
+	}
+	
+	def void addInternalEventHandlingActions(XSTS xSts, Collection<? extends Port> ports) {
+		xSts.addInternalEventHandlingActionsInEntryAction(ports)
+		xSts.addInternalEventHandlingActionsInMergedAction(ports)
+	}
+	
+	protected def void addInternalEventHandlingActionsInEntryAction(XSTS xSts, Collection<? extends Port> ports) {
+		val xStsEntryEventAction = xSts.entryEventTransition.action
+		xStsEntryEventAction.addInternalEventHandlingActions(ports)
+	}
+	
+	protected def void addInternalEventHandlingActionsInMergedAction(XSTS xSts, Collection<? extends Port> ports) {
+		val xStsMergedAction = xSts.mergedAction
+		xStsMergedAction.addInternalEventHandlingActions(ports)
+	}
 	
 	def void addInternalEventHandlingActions(
 			XSTS xSts, Component component, Traceability traceability) {
@@ -109,7 +134,7 @@ class InternalEventHandler {
 		val allInternalEventHandlingActions = action.getInternalEventHandlingActions(component)
 		
 		allInternalEventHandlingActions.retainAll(internalEventHandlingActions)
-		allInternalEventHandlingActions.forEach[it.remove]
+		allInternalEventHandlingActions.forEach[it.replaceWithEmptyAction]
 		
 		internalEventHandlingActions.clear // Clearing the trace set
 	}
@@ -123,12 +148,22 @@ class InternalEventHandler {
 		internalEventHandlingActions += xStsInternalEventHandlings // Filling the trace set
 	}
 	
+	protected def void addInternalEventHandlingActions(Action action, Collection<? extends Port> ports) {
+		val xSts = action.containingXsts
+		val xStsInternalEventHandlings = xSts.createInternalEventHandlingActions(ports)
+		action.appendToAction(xStsInternalEventHandlings)
+	}
+	
 	//
 	
 	protected def createInternalEventHandlingActions(XSTS xSts, Component component) {
+		val internalPorts = component.allInternalPorts
+		return xSts.createInternalEventHandlingActions(internalPorts)
+	}
+	
+	protected def createInternalEventHandlingActions(XSTS xSts, Collection<? extends Port> internalPorts) {
 		val actions = newArrayList
 		
-		val internalPorts = component.allInternalPorts
 		for (internalPort : internalPorts) {
 			actions += xSts.createInternalEventHandlingActions(internalPort)
 		}
@@ -279,7 +314,7 @@ class InternalEventHandler {
 			}
 		}
 		
-		for (xStsVariable : xStsVariables) {
+		for (xStsVariable : xStsVariables.filterNull) { // If internal events are filtered, there can be nulls
 			xStsVariableAssignments += xStsVariable.createVariableResetAction
 		}
 		

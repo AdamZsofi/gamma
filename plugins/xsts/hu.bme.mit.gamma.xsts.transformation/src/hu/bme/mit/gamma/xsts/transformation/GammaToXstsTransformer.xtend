@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -19,7 +19,10 @@ import hu.bme.mit.gamma.expression.model.PredicateExpression
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.expression.util.ExpressionEvaluator
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.TransitionMerging
-import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.ActionOptimizer
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.ArrayOptimizer
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.RemovableVariableRemover
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.ResettableVariableResetter
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer
 import hu.bme.mit.gamma.property.model.PropertyPackage
 import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.InterfaceModelFactory
@@ -29,18 +32,23 @@ import hu.bme.mit.gamma.statechart.lowlevel.transformation.GammaToLowlevelTransf
 import hu.bme.mit.gamma.transformation.util.preprocessor.AnalysisModelPreprocessor
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.xsts.model.SystemInEventGroup
+import hu.bme.mit.gamma.xsts.model.SystemInEventParameterGroup
 import hu.bme.mit.gamma.xsts.model.SystemOutEventGroup
+import hu.bme.mit.gamma.xsts.model.SystemOutEventParameterGroup
 import hu.bme.mit.gamma.xsts.model.XSTS
 import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
 import hu.bme.mit.gamma.xsts.transformation.serializer.ActionSerializer
+import hu.bme.mit.gamma.xsts.transformation.util.LoopActionUnroller
+import hu.bme.mit.gamma.xsts.transformation.util.MessageQueueOptimizer
+import hu.bme.mit.gamma.xsts.transformation.util.VariableGroupRetriever
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 import java.util.Collections
 import java.util.List
-import java.util.logging.Level
 import java.util.logging.Logger
 
 import static hu.bme.mit.gamma.xsts.transformation.util.Namings.*
 
+import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.xsts.derivedfeatures.XstsDerivedFeatures.*
 
@@ -50,44 +58,68 @@ class GammaToXstsTransformer {
 	// Transformation utility
 	protected final extension ComponentTransformer componentTransformer
 	// Transformation settings
-	protected final Integer schedulingConstraint
+	protected final Integer minSchedulingConstraint
+	protected final Integer maxSchedulingConstraint
+	
 	protected final PropertyPackage initialState
 	protected final InitialStateSetting initialStateSetting
+	protected final boolean optimize
+	protected final boolean optimizeOneCapacityArrays
+	protected final boolean unfoldMessageQueues
+	protected final boolean unrollLoopActions = true
 	// Auxiliary objects
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	protected final extension ActionSerializer actionSerializer = ActionSerializer.INSTANCE
 	protected final extension EnvironmentalActionFilter environmentalActionFilter =
 			EnvironmentalActionFilter.INSTANCE
-	protected final extension ActionOptimizer actionSimplifier = ActionOptimizer.INSTANCE
 	protected final extension AnalysisModelPreprocessor modelPreprocessor = AnalysisModelPreprocessor.INSTANCE
 	protected final extension ExpressionModelFactory expressionModelFactory = ExpressionModelFactory.eINSTANCE
 	protected final extension InterfaceModelFactory interfaceModelFactory = InterfaceModelFactory.eINSTANCE
 	protected final extension XSTSModelFactory xStsModelFactory = XSTSModelFactory.eINSTANCE
 	protected final extension XstsActionUtil xStsActionUtil = XstsActionUtil.INSTANCE
 	protected final extension ExpressionEvaluator expressionEvaluator = ExpressionEvaluator.INSTANCE
+	protected final extension VariableGroupRetriever variableGroupRetriever = VariableGroupRetriever.INSTANCE
 	// Logger
 	protected final Logger logger = Logger.getLogger("GammaLogger")
 	
 	new() {
-		this(null, true, true, TransitionMerging.HIERARCHICAL)
+		this(null, true, true, false, false, true, TransitionMerging.HIERARCHICAL)
 	}
 	
 	new(Integer schedulingConstraint, boolean transformOrthogonalActions,
-			boolean optimize, TransitionMerging transitionMerging) {
-		this(schedulingConstraint, transformOrthogonalActions,
-				optimize, transitionMerging,
-				null, null)
+			boolean optimize, boolean optimizeOneCapacityArrays,
+			boolean unfoldMessageQueues, boolean optimizeEnvironmentalMessageQueues,
+			TransitionMerging transitionMerging) {
+		this(schedulingConstraint, transformOrthogonalActions, optimize,
+				optimizeOneCapacityArrays, unfoldMessageQueues, optimizeEnvironmentalMessageQueues,
+				transitionMerging, null, null)
 	}
 	
 	new(Integer schedulingConstraint, boolean transformOrthogonalActions,
-			boolean optimize, TransitionMerging transitionMerging,
+			boolean optimize, boolean optimizeOneCapacityArrays,
+			boolean unfoldMessageQueues, boolean optimizeEnvironmentalMessageQueues,
+			TransitionMerging transitionMerging,
+			PropertyPackage initialState, InitialStateSetting initialStateSetting) {
+		this(schedulingConstraint, schedulingConstraint,
+			transformOrthogonalActions, optimize, optimizeOneCapacityArrays, unfoldMessageQueues,
+			optimizeEnvironmentalMessageQueues, transitionMerging, initialState, initialStateSetting)
+	}
+	
+	new(Integer minSchedulingConstraint, Integer maxSchedulingConstraint,
+			boolean transformOrthogonalActions,	boolean optimize, boolean optimizeOneCapacityArrays,
+			boolean unfoldMessageQueues, boolean optimizeEnvironmentalMessageQueues,
+			TransitionMerging transitionMerging,
 			PropertyPackage initialState, InitialStateSetting initialStateSetting) {
 		this.gammaToLowlevelTransformer = new GammaToLowlevelTransformer
 		this.componentTransformer = new ComponentTransformer(this.gammaToLowlevelTransformer,
-			transformOrthogonalActions, optimize, transitionMerging)
-		this.schedulingConstraint = schedulingConstraint
+			transformOrthogonalActions, optimize, optimizeEnvironmentalMessageQueues, transitionMerging)
+		this.minSchedulingConstraint = minSchedulingConstraint
+		this.maxSchedulingConstraint = maxSchedulingConstraint
 		this.initialState = initialState
 		this.initialStateSetting = initialStateSetting
+		this.optimize = optimize
+		this.optimizeOneCapacityArrays = optimizeOneCapacityArrays
+		this.unfoldMessageQueues = unfoldMessageQueues
 	}
 	
 	def preprocessAndExecuteAndSerialize(Package _package,
@@ -118,25 +150,28 @@ class GammaToXstsTransformer {
 	}
 	
 	def execute(Package _package) {
-		logger.log(Level.INFO, "Starting main execution of Gamma-XSTS transformation")
+		logger.info("Starting main execution of Gamma-XSTS transformation")
 		val gammaComponent = _package.firstComponent // Getting the first component
 		// "transform", not "execute", as we want to distinguish between statecharts
 		val lowlevelPackage = gammaToLowlevelTransformer.transform(_package)
 		// Serializing the xSTS
 		val xSts = gammaComponent.transform(lowlevelPackage) // Transforming the Gamma component
+		
 		// Creating system event groups for traceability purposes
-		logger.log(Level.INFO, "Creating system event groups for " + gammaComponent.name)
+		logger.info("Creating system event groups for " + gammaComponent.name)
 		xSts.createSystemEventGroups(gammaComponent) // Now synchronous event variables are put in there
 		// Removing duplicated types
 		xSts.removeDuplicatedTypes
 		// Setting clock variable increase
 		xSts.setClockVariables
-		_package.setSchedulingAnnotation(schedulingConstraint) // Needed for back-annotation
+		_package.setSchedulingAnnotation // Needed for back-annotation
+		// Remove internal parameter assignments from environment
+		xSts.removeInternalParameterAssignment(gammaComponent)
 		// Optimizing
 		xSts.optimize
 		
 		if (initialState !== null) {
-			logger.log(Level.INFO, "Setting initial state " + gammaComponent.name)
+			logger.info("Setting initial state " + gammaComponent.name)
 			val initialStateHandler = new InitialStateHandler(xSts, gammaComponent,
 				initialState, initialStateSetting)
 			initialStateHandler.execute
@@ -146,33 +181,57 @@ class GammaToXstsTransformer {
 	}
 	
 	protected def void setClockVariables(XSTS xSts) {
-		if (schedulingConstraint === null) {
+		if (minSchedulingConstraint === null) {
+			// We are expected to execute this branch if we aim at generating Timed XSTS models (TXSTS)
 			return
 		}
-		val xStsClockSettingAction = createSequentialAction => [
-			// Increasing the clock variables
-			for (xStsClockVariable : xSts.clockVariables) {
-				val maxValue = xStsClockVariable.greatestComparison
-				val incrementExpression = createAddExpression => [
-					it.operands += createReferenceExpression(xStsClockVariable)
-					it.operands += toIntegerLiteral(schedulingConstraint)
-				]
-				val rhs = (maxValue === null) ? incrementExpression :
-					createIfThenElseExpression => [
-						it.condition = createLessExpression => [
-							it.leftOperand = createReferenceExpression(xStsClockVariable)
-							it.rightOperand = toIntegerLiteral(maxValue)
-						]
-						it.then = incrementExpression
-						it.^else = createReferenceExpression(xStsClockVariable)
+		//
+		// Note that we get here if some kind of scheduling constraint is specified
+		//
+		val xStsClockSettingAction = createSequentialAction
+		// Increasing the clock variables
+		var VariableDeclaration xStsDelayVariable = null
+		if (minSchedulingConstraint != maxSchedulingConstraint) {
+			xStsDelayVariable = createIntegerTypeDefinition
+					.createVariableDeclaration(delayVariableName)
+			// Needed for back-annotation
+			xStsDelayVariable.addResettableAnnotation // So it is reset at the beginning
+			xSts.variableDeclarations += xStsDelayVariable
+			
+			val xStsDelayHavocAction = xStsDelayVariable.createHavocAction
+			xStsClockSettingAction.actions += xStsDelayHavocAction
+			
+			val xStsDelayAssume = minSchedulingConstraint.toIntegerLiteral
+					.createLessEqualExpression(xStsDelayVariable.createReferenceExpression)
+					.wrapIntoAndExpression(
+						xStsDelayVariable.createReferenceExpression
+							.createLessEqualExpression(maxSchedulingConstraint.toIntegerLiteral))
+					.createAssumeAction
+			xStsClockSettingAction.actions += xStsDelayAssume
+		}
+		
+		for (xStsClockVariable : xSts.clockVariables) {
+			val maxValue = xStsClockVariable.greatestComparison
+			val incrementExpression = xStsClockVariable.createReferenceExpression
+				.wrapIntoAddExpression(
+					(xStsDelayVariable === null) ?
+					toIntegerLiteral(minSchedulingConstraint) : xStsDelayVariable.createReferenceExpression)
+			val rhs = (maxValue === null) ? incrementExpression :
+				createIfThenElseExpression => [
+					it.condition = createLessExpression => [
+						it.leftOperand = createReferenceExpression(xStsClockVariable)
+						it.rightOperand = toIntegerLiteral(maxValue)
 					]
-				it.actions += xStsClockVariable.createAssignmentAction(rhs)
-				// Denoting variable as scheduled clock variable
-				xStsClockVariable.addScheduledClockAnnotation
-			}
-			// Putting it in merged transition as it does not work in environment action
-			it.actions += xSts.mergedAction
-		]
+					it.then = incrementExpression
+					it.^else = createReferenceExpression(xStsClockVariable)
+				]
+			xStsClockSettingAction.actions += xStsClockVariable.createAssignmentAction(rhs)
+			// Denoting variable as scheduled clock variable
+			xStsClockVariable.addScheduledClockAnnotation
+		}
+		// Putting it in merged transition as it does not work in environment action
+		xStsClockSettingAction.actions += xSts.mergedAction
+		
 		xSts.changeTransitions(xStsClockSettingAction.wrap)
 		// Clearing the clock variables - they are handled like normal ones from now on
 		// This way the UPPAAL transformer will not use clock types as variable values 
@@ -205,11 +264,11 @@ class GammaToXstsTransformer {
 		}
 	}
 	
-	protected def void setSchedulingAnnotation(Package _package, Integer schedulingConstraint) {
-		if (schedulingConstraint !== null) {
+	protected def void setSchedulingAnnotation(Package _package) {
+		if (minSchedulingConstraint !== null && minSchedulingConstraint == maxSchedulingConstraint) {
 			if (!_package.annotations.exists[it instanceof SchedulingConstraintAnnotation]) {
 				_package.annotations += createSchedulingConstraintAnnotation => [
-					it.schedulingConstraint = toIntegerLiteral(schedulingConstraint)
+					it.schedulingConstraint = toIntegerLiteral(minSchedulingConstraint)
 				]
 				_package.save
 			}
@@ -217,13 +276,14 @@ class GammaToXstsTransformer {
 	}
 	
 	protected def removeDuplicatedTypes(XSTS xSts) {
+		logger.info("Checking if the XSTS contains multiple type declarations with the same name")
 		val types = xSts.typeDeclarations
 		for (var i = 0; i < types.size - 1; i++) {
 			val lhs = types.get(i)
 			for (var j = i + 1; j < types.size; j++) {
 				val rhs = types.get(j)
-				if (lhs.helperEquals(rhs)) {
-					lhs.changeAllAndDelete(rhs, xSts)
+				if (lhs.name == rhs.name && lhs.helperEquals(rhs)) {
+					lhs.changeAllAndRemove(rhs, xSts) // Remove instead of delete to speed up
 					j--
 				}
 			}
@@ -234,7 +294,9 @@ class GammaToXstsTransformer {
 		val typeDeclarationNames = types.map[it.name]
 		val duplications = typeDeclarationNames
 				.filter[Collections.frequency(typeDeclarationNames, it) > 1].toList
-		logger.log(Level.INFO, "The XSTS contains multiple type declarations with the same name: " + duplications)
+		if (!duplications.empty) {
+			logger.info("The XSTS contains multiple type declarations with the same name: " + duplications)
+		}
 		// It is possible that in some instances of the same region, some states are removed due to optimization
 		var id = 0
 		for (type : types) {
@@ -248,16 +310,26 @@ class GammaToXstsTransformer {
 	
 	protected def void createSystemEventGroups(XSTS xSts, Component component) {
 		xSts.variableGroups.filter[it.annotation instanceof SystemInEventGroup].forEach[it.remove]
+		xSts.variableGroups.filter[it.annotation instanceof SystemInEventParameterGroup].forEach[it.remove]
 		xSts.variableGroups.filter[it.annotation instanceof SystemOutEventGroup].forEach[it.remove]
+		xSts.variableGroups.filter[it.annotation instanceof SystemOutEventParameterGroup].forEach[it.remove]
 		
 		val systemInEventGroup = createVariableGroup => [
 			it.annotation = createSystemInEventGroup
 		]
+		val systemInEventParameterGroup = createVariableGroup => [
+			it.annotation = createSystemInEventParameterGroup
+		]
 		val systemOutEventGroup = createVariableGroup => [
 			it.annotation = createSystemOutEventGroup
 		]
+		val systemOutEventParameterGroup = createVariableGroup => [
+			it.annotation = createSystemOutEventParameterGroup
+		]
 		xSts.variableGroups += systemInEventGroup
+		xSts.variableGroups += systemInEventParameterGroup
 		xSts.variableGroups += systemOutEventGroup
+		xSts.variableGroups += systemOutEventParameterGroup
 		
 		for (port : component.allBoundSimplePorts) {
 			val instance = port.containingComponentInstance
@@ -266,6 +338,16 @@ class GammaToXstsTransformer {
 				val inEventVariable = xSts.getVariable(inEventVariableName)
 				if (inEventVariable !== null) {
 					systemInEventGroup.variables += inEventVariable
+					// Parameters
+					for (inParameter : inEvent.parameterDeclarations) {
+						val inEventParameterVariableNames = customizeInNames(inParameter, port, instance)
+						for (inEventParameterVariableName : inEventParameterVariableNames) {
+							val inEventParameterVariable = xSts.getVariable(inEventParameterVariableName)
+							if (inEventParameterVariable !== null) {
+								systemInEventParameterGroup.variables += inEventParameterVariable
+							}
+						}
+					}
 				}
 			}
 			for (outEvent : port.outputEvents) {
@@ -273,19 +355,78 @@ class GammaToXstsTransformer {
 				val outEventVariable = xSts.getVariable(outEventVariableName)
 				if (outEventVariable !== null) {
 					systemOutEventGroup.variables += outEventVariable
+					// Parameters
+					for (outParameter : outEvent.parameterDeclarations) {
+						val outEventParameterVariableNames = customizeOutNames(outParameter, port, instance)
+						for (outEventParameterVariableName : outEventParameterVariableNames) {
+							val outEventParameterVariable = xSts.getVariable(outEventParameterVariableName)
+							if (outEventParameterVariable !== null) {
+								systemOutEventParameterGroup.variables += outEventParameterVariable
+							}
+						}
+					}
 				}
 			}
 		}
 	}
 	
+	protected def removeInternalParameterAssignment(XSTS xSts, Component component) {
+		val systemInEventParameters = xSts.systemInEventParameterVariableGroup.variables
+		val systemInEventInternalParameters = systemInEventParameters
+				.filter[it.internal].toList
+				
+				
+		// In the asynchronous case, the underlying transformation works
+		if (component.synchronous) {
+			val inEventTransition = xSts.inEventTransition
+			systemInEventInternalParameters.changeAssignmentsToEmptyActions(inEventTransition)
+		}
+		
+		systemInEventParameters -= systemInEventInternalParameters
+	}
+		
+	
 	protected def optimize(XSTS xSts) {
-		logger.log(Level.INFO, "Optimizing reset, environment and merged actions in " + xSts.name)
-		xSts.variableInitializingTransition = xSts.variableInitializingTransition.optimize
-		xSts.configurationInitializingTransition = xSts.configurationInitializingTransition.optimize
-		xSts.entryEventTransition = xSts.entryEventTransition.optimize
-		xSts.inEventTransition = xSts.inEventTransition.optimize
-		xSts.outEventTransition = xSts.outEventTransition.optimize
-		xSts.changeTransitions(xSts.transitions.optimize)
+		logger.info("Optimizing reset, environment and merged actions in " + xSts.name)
+		val XstsOptimizer xStsOptimizer = XstsOptimizer.INSTANCE
+		xStsOptimizer.optimizeXSts(xSts) // Affects all actions
+		
+		if (optimize) {
+			logger.info("Optimizing read-only variables in " + xSts.name)
+			val variableRemover = RemovableVariableRemover.INSTANCE
+			variableRemover.removeReadOnlyVariables(xSts) // Affects parameter and input variables, too
+			
+			logger.info("Resetting resettable variables in the environment in " + xSts.name)
+			val resetter = ResettableVariableResetter.INSTANCE
+			resetter.resetResettableVariables(xSts)
+			
+			xStsOptimizer.optimizeXSts(xSts) // Once again after the potential variable removals above
+			// Due to, e.g., read-only -> optimize (inline) chain that results in unused local variables
+		}
+		
+		if (unfoldMessageQueues) {
+			logger.info("Unfolding message queues in " + xSts.name)
+			val messageQueueOptimizer = MessageQueueOptimizer.INSTANCE
+			messageQueueOptimizer.unfoldMessageQueues(xSts)
+		}
+		// Unfold before one-capacity array to ensure "sound" queue unfolding (one-capacity arrays can be non-queues)
+		if (optimizeOneCapacityArrays) {
+			logger.info("Optimizing one capacity arrays in " + xSts.name)
+			val arrayOptimizer = ArrayOptimizer.INSTANCE
+			arrayOptimizer.optimizeOneCapacityArrays(xSts)
+		}
+		if (unrollLoopActions) {
+			logger.info("Unrolling loop actions in " + xSts.name)
+			val loopActionUnroller = LoopActionUnroller.INSTANCE
+			loopActionUnroller.unrollLoopActions(xSts)
+		}
+		
+		if (unfoldMessageQueues || optimizeOneCapacityArrays || unrollLoopActions) {
+			logger.info("Optimizing XSTS another time: " + xSts.name)
+			xStsOptimizer.optimizeXSts(xSts) // Maybe unfoldings/unrollings can be exploited
+		}
+		
+		logger.info("Optimization has finished for " + xSts.name)
 	}
 	
 }

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -28,11 +28,16 @@ class ThetaReferenceSerializer implements AbstractReferenceSerializer {
 	//
 	
 	override getId(State state, Region parentRegion, ComponentInstanceReferenceExpression instance) {
-		return '''«state.getSingleTargetStateName(parentRegion, instance)»«FOR parent : state.ancestors BEFORE " && " SEPARATOR " && "»«parent.getSingleTargetStateName(parent.parentRegion, instance)»«ENDFOR»'''
+//		return '''«state.getSingleTargetStateName(parentRegion, instance)»«FOR parent : state.ancestors BEFORE " && " SEPARATOR " && "»«parent.getSingleTargetStateName(parent.parentRegion, instance)»«ENDFOR»'''
+		return '''«state.getSingleTargetStateName(parentRegion, instance)»''' // Enough due to __Inactive__ and __history__ literals
 	}
 	
 	def protected getSingleTargetStateName(State state, Region parentRegion, ComponentInstanceReferenceExpression instance) {
-		return '''«parentRegion.customizeName(instance)» == «state.customizeName»'''
+		return '''«parentRegion.getId(instance)» == «state.XStsId»'''
+	}
+	
+	override getId(Region region, ComponentInstanceReferenceExpression instance) {
+		return region.customizeName(instance)
 	}
 	
 	override getId(VariableDeclaration variable, ComponentInstanceReferenceExpression instance) {
@@ -41,14 +46,14 @@ class ThetaReferenceSerializer implements AbstractReferenceSerializer {
 	
 	override getId(Event event, Port port, ComponentInstanceReferenceExpression instance) {
 		if (port.isInputEvent(event)) {
-			event.customizeInputName(port, instance)
+			return event.customizeInputName(port, instance)
 		}
 		return event.customizeOutputName(port, instance)
 	}
 	
 	override getId(Event event, Port port, ParameterDeclaration parameter, ComponentInstanceReferenceExpression instance) {
 		if (port.isInputEvent(event)) {
-			parameter.customizeInNames(port, instance)
+			return parameter.customizeInNames(port, instance)
 		}
 		return parameter.customizeOutNames(port, instance)
 	}

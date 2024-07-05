@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,6 +10,9 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.statechart.language.validation;
 
+import java.util.List;
+
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.xtext.validation.Check;
 
 import hu.bme.mit.gamma.expression.model.ArgumentedElement;
@@ -22,6 +25,7 @@ import hu.bme.mit.gamma.statechart.composite.Channel;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstance;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.ControlSpecification;
+import hu.bme.mit.gamma.statechart.composite.EventPassing;
 import hu.bme.mit.gamma.statechart.composite.InstancePortReference;
 import hu.bme.mit.gamma.statechart.composite.MessageQueue;
 import hu.bme.mit.gamma.statechart.composite.PortBinding;
@@ -60,12 +64,26 @@ import hu.bme.mit.gamma.statechart.statechart.Transition;
 import hu.bme.mit.gamma.statechart.util.StatechartModelValidator;
 
 public class StatechartLanguageValidator extends AbstractStatechartLanguageValidator {
-
+	//
 	protected StatechartModelValidator statechartModelValidator = StatechartModelValidator.INSTANCE;
-	
+	//
 	public StatechartLanguageValidator() {
 		super.expressionModelValidator = statechartModelValidator;
 		super.actionModelValidator = statechartModelValidator;
+	}
+	
+	@Check
+	@Override
+	public void checkNameUniqueness(EObject element) {
+		if (element instanceof Interface _interface) {
+			List<Event> events = ecoreUtil.getAllContentsOfType(_interface, Event.class);
+			if (!events.isEmpty()) { // checkNameUniqueness(EObject ) would do this - this way it may be faster
+				handleValidationResultMessage(expressionModelValidator.checkNameUniqueness(events));
+			}
+		}
+		else {
+			super.checkNameUniqueness(element);
+		}
 	}
 	
 	@Check
@@ -126,6 +144,11 @@ public class StatechartLanguageValidator extends AbstractStatechartLanguageValid
 	@Check
 	public void checkParameterName(Event event) {
 		handleValidationResultMessage(statechartModelValidator.checkParameterName(event));
+	}
+	
+	@Check
+	public void checkInterfaceInvariants(Interface gammaInterface) {
+		handleValidationResultMessage(statechartModelValidator.checkInterfaceInvariants(gammaInterface));
 	}
 	
 	// Statechart adaptive contract
@@ -195,13 +218,23 @@ public class StatechartLanguageValidator extends AbstractStatechartLanguageValid
 	}
 	
 	@Check
-	public void checkElseTransitionPriority(Transition transition) {
-		handleValidationResultMessage(statechartModelValidator.checkElseTransitionPriority(transition));
+	public void checkStateInvariants(hu.bme.mit.gamma.statechart.statechart.State state) {
+		handleValidationResultMessage(statechartModelValidator.checkStateInvariants(state));
 	}
 	
 	@Check
+	public void checkElseTransitionPriority(Transition transition) {
+		handleValidationResultMessage(statechartModelValidator.checkElseTransitionPriority(transition));
+	}
+
+	@Check
 	public void checkTransitionTriggers(Transition transition) {
 		handleValidationResultMessage(statechartModelValidator.checkTransitionTriggers(transition));
+	}
+
+	@Check
+	public void checkInitialTransition(Transition transition) {
+		handleValidationResultMessage(statechartModelValidator.checkInitialTransition(transition));
 	}
 	
 	@Check
@@ -311,6 +344,16 @@ public class StatechartLanguageValidator extends AbstractStatechartLanguageValid
 	@Check
 	public void checkTimeSpecification(TimeSpecification timeSpecification) {
 		handleValidationResultMessage(statechartModelValidator.checkTimeSpecification(timeSpecification));
+	}
+	
+	@Check
+	public void checkStatechartInvariants(StatechartDefinition statechart) {
+		handleValidationResultMessage(statechartModelValidator.checkStatechartInvariants(statechart));
+	}
+	
+	@Check
+	public void checkPortInvariants(Port port) {
+		handleValidationResultMessage(statechartModelValidator.checkPortInvariants(port));
 	}
 	
 	// Composite system
@@ -469,6 +512,11 @@ public class StatechartLanguageValidator extends AbstractStatechartLanguageValid
 	public void checkMessageQueueAnyEventReferences(AnyPortEventReference anyPortEventReference) {
 		handleValidationResultMessage(statechartModelValidator
 				.checkMessageQueueAnyEventReferences(anyPortEventReference));
+	}
+	
+	@Check
+	public void checkEventPassings(EventPassing eventPassing) {
+		handleValidationResultMessage(statechartModelValidator.checkEventPassings(eventPassing));
 	}
 	
 	@Check

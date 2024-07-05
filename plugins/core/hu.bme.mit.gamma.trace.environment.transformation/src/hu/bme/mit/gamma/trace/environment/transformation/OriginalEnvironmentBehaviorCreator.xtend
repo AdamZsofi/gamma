@@ -1,3 +1,13 @@
+/********************************************************************************
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * SPDX-License-Identifier: EPL-1.0
+ ********************************************************************************/
 package hu.bme.mit.gamma.trace.environment.transformation
 
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
@@ -25,7 +35,7 @@ class OriginalEnvironmentBehaviorCreator {
 	
 	protected final Trace trace
 	protected final EnvironmentModel environmentModel
-	protected final boolean considerOutEvents
+	protected final boolean handleOutEventPassing
 	
 	protected final extension Namings namings
 	
@@ -37,29 +47,29 @@ class OriginalEnvironmentBehaviorCreator {
 	protected extension StatechartModelFactory statechartModelFactory = StatechartModelFactory.eINSTANCE
 	protected extension InterfaceModelFactory interfaceModelFactory = InterfaceModelFactory.eINSTANCE
 	
-	new(Trace trace, EnvironmentModel environmentModel, Namings namings, boolean considerOutEvents) {
+	new(Trace trace, EnvironmentModel environmentModel, Namings namings, boolean handleOutEventPassing) {
 		this.trace = trace
 		this.environmentModel = environmentModel
-		this.considerOutEvents = considerOutEvents
+		this.handleOutEventPassing = handleOutEventPassing
 		this.namings = namings
 	}
 	
 	def createOriginalEnvironmentBehavior(State lastState) {
-		if (environmentModel === EnvironmentModel.SYNCHRONOUS) {
+		if (environmentModel == EnvironmentModel.SYNCHRONOUS) {
 			lastState.createSynchronousEnvironmentBehavior
 		}
-		else if (environmentModel === EnvironmentModel.ASYNCHRONOUS) {
+		else if (environmentModel == EnvironmentModel.ASYNCHRONOUS) {
 			lastState.createAsynchronousEnvironmentBehavior
 		}
 		// No behavior in the case of OFF
-		if (considerOutEvents) {
-			val envrionmentModel = lastState.containingStatechart
+		if (handleOutEventPassing) {
+			val environmentModel = lastState.containingStatechart
 			val inOutCycleVariable = createBooleanTypeDefinition.createVariableDeclaration(
 				inOutCycleVariableName, createFalseExpression /* false- check initial execution
 				 * of the composite component to handle initial raises*/)
-			envrionmentModel.variableDeclarations += inOutCycleVariable
+			environmentModel.variableDeclarations += inOutCycleVariable
 			
-			val stateTransitions = envrionmentModel.transitions.filter[it.sourceState instanceof State]
+			val stateTransitions = environmentModel.transitions.filter[it.sourceState instanceof State]
 			for (stateTransition : stateTransitions) {
 				val source = stateTransition.sourceState
 				val variableReference = inOutCycleVariable.createReferenceExpression
@@ -72,7 +82,7 @@ class OriginalEnvironmentBehaviorCreator {
 			}
 			
 			// New region for setting the inOutCycleVariable
-			val inOutCycleState = envrionmentModel.createRegionWithState(inOutCycleRegionName,
+			val inOutCycleState = environmentModel.createRegionWithState(inOutCycleRegionName,
 					inOutCycleInitialStateName, inOutCycleStateName)
 			val inOutCycleTransition = inOutCycleState.createTransition(inOutCycleState)
 			inOutCycleTransition.trigger = createOnCycleTrigger
@@ -84,19 +94,22 @@ class OriginalEnvironmentBehaviorCreator {
 	private def createSynchronousEnvironmentBehavior(State lastState) {
 		val proxyEnvironmentPortPairs = trace.proxyEnvironmentPortPairs
 		val lastInState = lastState.createSynchronousEnvironmentBehavior(proxyEnvironmentPortPairs,
-			[it.inputEvents], inputRegionName, inputInitialStateName, inputStateName)
-		trace.lastInState = lastInState
+				[it.inputEvents], inputRegionName, inputInitialStateName, inputStateName)
+		if (true) {
+			lastInState.relocateOutgoingTransitionsAndNodes(lastState)
+			lastState.removeRegions
+		}
 		
-		if (considerOutEvents) {
+		if (handleOutEventPassing) {
 			val envrionmentModel = lastState.containingStatechart
 			val environmentProxyPortPairs = proxyEnvironmentPortPairs.invert.toSet
 			val lastOutState = envrionmentModel.createSynchronousEnvironmentBehavior(environmentProxyPortPairs,
-				[it.inputEvents /*See inversion*/], outputRegionName, outputInitialStateName, outputStateName)
+					[it.inputEvents /*See inversion*/], outputRegionName, outputInitialStateName, outputStateName)
 			val outputRegion = lastOutState.parentRegion
 			trace.lastOutState = lastOutState
 			// Adding another step
 			val firstOutputState = envrionmentModel.createSynchronousEnvironmentBehavior(
-				environmentProxyPortPairs, [it.inputEvents /*See inversion*/], "", "", firstOutputStateName)
+					environmentProxyPortPairs, [it.inputEvents /*See inversion*/], "", "", firstOutputStateName)
 			val firstOutputRegion = firstOutputState.parentRegion
 			outputRegion.addStep(firstOutputRegion)
 		}
@@ -175,19 +188,22 @@ class OriginalEnvironmentBehaviorCreator {
 	private def createAsynchronousEnvironmentBehavior(State lastState) {
 		val proxyEnvironmentPortPairs = trace.proxyEnvironmentPortPairs
 		val lastInState = lastState.createAsynchronousEnvironmentBehavior(proxyEnvironmentPortPairs,
-			[it.inputEvents], inputRegionName, inputInitialStateName, inputStateName)
-		trace.lastInState = lastInState
+				[it.inputEvents], inputRegionName, inputInitialStateName, inputStateName)
+		if (true) {
+			lastInState.relocateOutgoingTransitionsAndNodes(lastState)
+			lastState.removeRegions
+		}
 		
-		if (considerOutEvents) {
+		if (handleOutEventPassing) {
 			val envrionmentModel = lastState.containingStatechart
 			val environmentProxyPortPairs = proxyEnvironmentPortPairs.invert.toSet
 			val lastOutState = envrionmentModel.createAsynchronousEnvironmentBehavior(environmentProxyPortPairs,
-				[it.inputEvents /*See inversion*/], outputRegionName, outputInitialStateName, outputStateName)
+					[it.inputEvents /*See inversion*/], outputRegionName, outputInitialStateName, outputStateName)
 			val outputRegion = lastOutState.parentRegion
 			trace.lastOutState = lastOutState
 			// Adding another step
 			val firstOutputState = envrionmentModel.createAsynchronousEnvironmentBehavior(
-				environmentProxyPortPairs, [it.inputEvents /*See inversion*/], "", "", firstOutputStateName)
+					environmentProxyPortPairs, [it.inputEvents /*See inversion*/], "", "", firstOutputStateName)
 			val firstOutputRegion = firstOutputState.parentRegion
 			outputRegion.addStep(firstOutputRegion)
 		}
@@ -200,7 +216,7 @@ class OriginalEnvironmentBehaviorCreator {
 		initialState.remove
 		
 		val state = ^extension.states.onlyElement
-		original.stateNodes += ^extension.stateNodes // TODO first step out-events
+		original.stateNodes += ^extension.stateNodes // First step for out-events added in TraceReplay...
 		
 		val lastOutState = trace.lastOutState
 		

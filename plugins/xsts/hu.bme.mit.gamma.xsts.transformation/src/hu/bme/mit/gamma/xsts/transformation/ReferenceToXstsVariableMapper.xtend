@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,6 +10,7 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.xsts.transformation
 
+import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition
 import hu.bme.mit.gamma.expression.model.EnumerationTypeDefinition
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration
 import hu.bme.mit.gamma.expression.model.TypeReference
@@ -24,11 +25,11 @@ import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.xsts.model.XSTS
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 import java.util.List
-import java.util.logging.Level
 import java.util.logging.Logger
 
 import static com.google.common.base.Preconditions.checkState
 
+import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.xsts.transformation.util.Namings.*
 
@@ -92,7 +93,7 @@ class ReferenceToXstsVariableMapper {
 				xStsVariables += xStsVariable
 			}
 			else {
-				logger.log(Level.INFO, "Not found XSTS variable for " + port.name + "." + event.name)
+				logger.info("Not found XSTS variable for " + port.name + "." + event.name)
 			}
 		}
 		return xStsVariables
@@ -135,7 +136,7 @@ class ReferenceToXstsVariableMapper {
 				xStsVariableLists += xStsVariables
 			}
 			else {
-				logger.log(Level.INFO, "Not found XSTS variable for " + port.name + "::" + parameter.name)
+				logger.info("Not found XSTS variable for " + port.name + "::" + parameter.name)
 			}
 		}
 		return xStsVariableLists
@@ -168,7 +169,7 @@ class ReferenceToXstsVariableMapper {
 				xStsVariables += xStsVariable
 			}
 			else {
-				logger.log(Level.INFO, "Not found XSTS variable for " + port.name + "." + event.name)
+				logger.info("Not found XSTS variable for " + port.name + "." + event.name)
 			}
 		}
 		return xStsVariables
@@ -209,7 +210,7 @@ class ReferenceToXstsVariableMapper {
 				xStsVariables += xStsVariable
 			}
 			else {
-				logger.log(Level.INFO, "Not found XSTS variable for " + port.name + "::" + parameter.name)
+				logger.info("Not found XSTS variable for " + port.name + "::" + parameter.name)
 			}
 		}
 		return xStsVariables
@@ -256,6 +257,24 @@ class ReferenceToXstsVariableMapper {
 			}
 		}
 		throw new IllegalArgumentException("Not known state literal: " + state)
+	}
+	
+	def getEnumLiteral(EnumerationLiteralDefinition literal) {
+		val enumType = literal.typeDeclaration
+		val enumTypeName = enumType.customizeTypeName
+		
+		val typeDeclaration = xSts.typeDeclarations.findFirst[it.name == enumTypeName]
+		if (typeDeclaration !== null) {
+			val enumName = literal.customizeEnumLiteralName
+			val enumDefinition = typeDeclaration.typeDefinition as EnumerationTypeDefinition
+			val enumLiteral = enumDefinition.literals.findFirst[it.name == enumName]
+			
+			if (enumLiteral !== null) {
+				return enumLiteral
+			}
+		}
+		
+		throw new IllegalArgumentException("Not known enum literal: " + literal)
 	}
 	
 }

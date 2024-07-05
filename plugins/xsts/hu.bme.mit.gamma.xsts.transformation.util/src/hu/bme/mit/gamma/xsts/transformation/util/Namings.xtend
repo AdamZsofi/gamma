@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,6 +10,7 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.xsts.transformation.util
 
+import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration
 import hu.bme.mit.gamma.expression.model.TypeDeclaration
@@ -18,6 +19,7 @@ import hu.bme.mit.gamma.expression.util.ExpressionUtil
 import hu.bme.mit.gamma.statechart.composite.ComponentInstance
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceReferenceExpression
 import hu.bme.mit.gamma.statechart.composite.MessageQueue
+import hu.bme.mit.gamma.statechart.interface_.Clock
 import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.Event
 import hu.bme.mit.gamma.statechart.interface_.Port
@@ -45,6 +47,14 @@ class Namings {
 	
 	// To XSTS: in XstsNamings
 	
+	static def String getDelayVariableName() '''__Delay__'''
+	static def String getInstanceEndcodingVariableName() '''__InstanceEncoding__'''
+	
+	// Types
+	
+	static def String customizeTypeName(TypeDeclaration type) '''«getName(type)»'''
+	static def String customizeEnumLiteralName(EnumerationLiteralDefinition literal) '''«getName(literal).enumLiteralName»'''
+	
 	// Asynchronous message queue - XSTS customization
 	
 	static def String customizeMasterQueueName(MessageQueue queue, ComponentInstance instance) {
@@ -69,6 +79,10 @@ class Namings {
 	static def String customizeName(TimeoutDeclaration timeout, ComponentInstanceReferenceExpression instance) '''«customizeName(timeout, instance.FQN)»'''
 	static def String customizeName(TimeoutDeclaration timeout, String instance) '''«getName(timeout).variableName»_«instance»'''
 	
+	static def String customizeName(Clock clock, ComponentInstance instance) '''«customizeName(clock, instance.name)»'''
+	static def String customizeName(Clock clock, ComponentInstanceReferenceExpression instance) '''«customizeName(clock, instance.FQN)»'''
+	static def String customizeName(Clock clock, String instance) '''«getName(clock).variableName»_«instance»'''
+	
 	static def String customizeInputName(Event event, Port port, ComponentInstance instance) '''«customizeInputName(event, port, instance.name)»'''
 	static def String customizeInputName(Event event, Port port, ComponentInstanceReferenceExpression instance) '''«customizeInputName(event, port, instance.FQN)»'''
 	static def String customizeInputName(Event event, Port port, String instance) '''«event.getInputName(port).eventName»_«instance»'''
@@ -89,7 +103,7 @@ class Namings {
 	
 	static def List<String> customizeNames(VariableDeclaration variable) { variable.names.map[it.variableName].toList }
 	static def List<String> customizeNames(VariableDeclaration variable, ComponentInstance instance) { customizeNames(variable, instance.name) }
-	static def List<String> customizeNames(VariableDeclaration variable, ComponentInstanceReferenceExpression instance) { customizeNames(variable, instance.FQN) }
+	static def List<String> customizeNames(VariableDeclaration variable, ComponentInstanceReferenceExpression instance) { customizeNames(variable, instance.FQN ) }
 	static def List<String> customizeNames(VariableDeclaration variable, String instance) { getNames(variable).map[it.variableName + "_" + instance] }
 	
 	// Region customization

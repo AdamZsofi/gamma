@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -14,7 +14,10 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.Queue;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
@@ -49,6 +52,7 @@ import hu.bme.mit.gamma.statechart.composite.CompositeModelFactory;
 import hu.bme.mit.gamma.statechart.composite.ControlFunction;
 import hu.bme.mit.gamma.statechart.composite.ControlSpecification;
 import hu.bme.mit.gamma.statechart.composite.DiscardStrategy;
+import hu.bme.mit.gamma.statechart.composite.EventPassing;
 import hu.bme.mit.gamma.statechart.composite.InstancePortReference;
 import hu.bme.mit.gamma.statechart.composite.MessageQueue;
 import hu.bme.mit.gamma.statechart.composite.PortBinding;
@@ -174,7 +178,7 @@ public class StatechartUtil extends ActionUtil {
 		return createInstanceReference(List.of(instance));
 	}
 	
-	public ComponentInstanceReferenceExpression createInstanceReference(List<ComponentInstance> instances) {
+	public ComponentInstanceReferenceExpression createInstanceReference(List<? extends ComponentInstance> instances) {
 		if (instances.isEmpty()) {
 			throw new IllegalArgumentException("Empty instance list: " + instances);
 		}
@@ -465,8 +469,20 @@ public class StatechartUtil extends ActionUtil {
 	public AsynchronousAdapter wrapIntoAdapter(SynchronousComponent component, String adapterName) {
 		AsynchronousAdapter adapter = compositeFactory.createAsynchronousAdapter();
 		adapter.setName(adapterName);
+		
 		SynchronousComponentInstance synchronousInstance = instantiateSynchronousComponent(component);
 		adapter.setWrappedComponent(synchronousInstance);
+		
+		for (ParameterDeclaration parameterDeclaration : component.getParameterDeclarations()) {
+			ParameterDeclaration clonedParamaterDeclaration = ecoreUtil.clone(parameterDeclaration);
+			adapter.getParameterDeclarations()
+					.add(clonedParamaterDeclaration);
+			
+			DirectReferenceExpression argument = createReferenceExpression(clonedParamaterDeclaration);
+			synchronousInstance.getArguments()
+					.add(argument);
+		}
+		
 		return adapter;
 	}
 	
@@ -498,7 +514,10 @@ public class StatechartUtil extends ActionUtil {
 		for (Port port : StatechartModelDerivedFeatures.getAllPortsWithInput(component)) {
 			AnyPortEventReference reference = statechartFactory.createAnyPortEventReference();
 			reference.setPort(port);
-			messageQueue.getEventReferences().add(reference);
+			
+			EventPassing eventPassing = createEventPassing(reference);
+			
+			messageQueue.getEventPassings().add(eventPassing);
 		}
 		
 		adapter.getMessageQueues().add(messageQueue);
@@ -716,6 +735,12 @@ public class StatechartUtil extends ActionUtil {
 		return StatechartModelDerivedFeatures.getWrapperInstanceName(component);
 	}
 	
+	public SimpleChannel connectPortsViaChannels(InstancePortReference lhsReference,
+			InstancePortReference rhsReference) {
+		return connectPortsViaChannels(lhsReference.getInstance(), lhsReference.getPort(),
+				rhsReference.getInstance(), rhsReference.getPort());
+	}
+	
 	public SimpleChannel connectPortsViaChannels(ComponentInstance lhsInstance, Port lhsPort,
 			ComponentInstance rhsInstance, Port rhsPort) {
 		SimpleChannel channel = compositeFactory.createSimpleChannel();
@@ -738,6 +763,19 @@ public class StatechartUtil extends ActionUtil {
 			requiredReference.setPort(lhsPort);
 		}
 		return channel;
+	}
+	
+	public EventPassing createEventPassing(EventReference source) {
+		return createEventPassing(source, null);
+	}
+	
+	public EventPassing createEventPassing(EventReference source, EventReference target) {
+		EventPassing eventPassing = compositeFactory.createEventPassing();
+
+		eventPassing.setSource(source);
+		eventPassing.setTarget(target);
+		
+		return eventPassing;
 	}
 	
 	public PortBinding createPortBinding(Port systemPort, InstancePortReference portReference) {
@@ -785,6 +823,14 @@ public class StatechartUtil extends ActionUtil {
 	
 	public void addWrapperComponentAnnotation(Component component) {
 		addAnnotation(component, interfaceFactory.createWrapperComponentAnnotation());
+	}
+	
+	public void addRunUponExternalEventAnnotation(Component component) {
+		addAnnotation(component, statechartFactory.createRunUponExternalEventAnnotation());
+	}
+	
+	public void addMutantAnnotation(Component component) {
+		addAnnotation(component, statechartFactory.createMutantAnnotation());
 	}
 	
 	// Statechart element creators
@@ -945,6 +991,20 @@ public class StatechartUtil extends ActionUtil {
 		return reference;
 	}
 	
+	public ComponentInstanceEventReferenceExpression createSystemEventReference(Port port, Event event) {
+		Entry<List<ComponentInstance>, Port> boundSimplePort = StatechartModelDerivedFeatures.getBoundSimplePort(port);
+		if (boundSimplePort == null) {
+			return null;
+		}
+		
+		List<ComponentInstance> instances = boundSimplePort.getKey();
+		Port simplePort = boundSimplePort.getValue();
+		
+		ComponentInstanceReferenceExpression instanceReference = createInstanceReference(instances);
+		
+		return createEventReference(instanceReference, simplePort, event);
+	}
+	
 	public ComponentInstanceEventParameterReferenceExpression createParameterReference(
 			ComponentInstanceReferenceExpression instance, Port port, Event event, ParameterDeclaration parameter) {
 		ComponentInstanceEventParameterReferenceExpression reference =
@@ -954,6 +1014,21 @@ public class StatechartUtil extends ActionUtil {
 		reference.setEvent(event);
 		reference.setParameterDeclaration(parameter);
 		return reference;
+	}
+	
+	public ComponentInstanceEventParameterReferenceExpression createSystemParameterReference(
+			Port port, Event event, ParameterDeclaration parameter) {
+		Entry<List<ComponentInstance>, Port> boundSimplePort = StatechartModelDerivedFeatures.getBoundSimplePort(port);
+		if (boundSimplePort == null) {
+			return null;
+		}
+		
+		List<ComponentInstance> instances = boundSimplePort.getKey();
+		Port simplePort = boundSimplePort.getValue();
+		
+		ComponentInstanceReferenceExpression instanceReference = createInstanceReference(instances);
+		
+		return createParameterReference(instanceReference, simplePort, event, parameter);
 	}
 	
 	// Synchronous-asynchronous statecharts
@@ -990,6 +1065,68 @@ public class StatechartUtil extends ActionUtil {
 		target.setTransitionPriority(source.getTransitionPriority());
 		// Containment
 		ecoreUtil.copyContent(source, target);
+	}
+	
+	public List<Transition> relocateIncomingTransitions(StateNode source, StateNode target) {
+		List<Transition> incomingTransitions = StatechartModelDerivedFeatures.getIncomingTransitions(source);
+		for (Transition incomingTransition : incomingTransitions) {
+			incomingTransition.setTargetState(target);
+		}
+		return incomingTransitions;
+	}
+	
+	public List<Transition> relocateOutgoingTransitions(StateNode source, StateNode target) {
+		List<Transition> outgoingTransitions = StatechartModelDerivedFeatures.getOutgoingTransitions(source);
+		for (Transition outgoingTransition : outgoingTransitions) {
+			outgoingTransition.setSourceState(target);
+		}
+		return outgoingTransitions;
+	}
+	
+	public void relocateOutgoingTransitionsAndNodes(StateNode source, StateNode target) {
+		List<Transition> outgoingTransitions = relocateOutgoingTransitions(source, target);
+		
+		Region targetRegion = StatechartModelDerivedFeatures.getParentRegion(target);
+		
+		Set<Transition> checkedTransitions = new HashSet<Transition>();
+		Queue<Transition> transitions = new LinkedList<Transition>(outgoingTransitions);
+		while (!transitions.isEmpty()) {
+			Transition transition = transitions.poll();
+			if (!checkedTransitions.contains(transition)) {
+				
+				StateNode targetNode = transition.getTargetState();
+				if (targetNode == source) {
+					// If there is a source --> .. --> source loop, we set 'target' as target
+					transition.setTargetState(target);
+				}
+				else {
+					targetRegion.getStateNodes().add(targetNode);
+				}
+				
+				transitions.addAll(
+						StatechartModelDerivedFeatures.getOutgoingTransitions(targetNode));
+				
+				checkedTransitions.add(transition);
+			}
+		}
+	}
+	
+	public void removeRegions(CompositeElement element) {
+		StatechartDefinition statechart = StatechartModelDerivedFeatures
+				.getContainingStatechart(element);
+		
+		List<StateNode> nodes = ecoreUtil.getAllContentsOfType(element, StateNode.class);
+		
+		List<Transition> transitions = new ArrayList<Transition>(
+				statechart.getTransitions());
+		for (Transition transition : transitions) {
+			if (nodes.contains(transition.getSourceState()) ||
+					nodes.contains(transition.getTargetState())) {
+				ecoreUtil.remove(transition);
+			}
+		}
+		
+		ecoreUtil.removeAll(element.getRegions());
 	}
 	
 }

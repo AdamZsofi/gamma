@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -24,6 +24,7 @@ import hu.bme.mit.gamma.expression.model.FalseExpression
 import hu.bme.mit.gamma.expression.model.GreaterEqualExpression
 import hu.bme.mit.gamma.expression.model.GreaterExpression
 import hu.bme.mit.gamma.expression.model.IfThenElseExpression
+import hu.bme.mit.gamma.expression.model.ImplyExpression
 import hu.bme.mit.gamma.expression.model.InequalityExpression
 import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression
 import hu.bme.mit.gamma.expression.model.LessEqualExpression
@@ -32,6 +33,7 @@ import hu.bme.mit.gamma.expression.model.ModExpression
 import hu.bme.mit.gamma.expression.model.MultiplyExpression
 import hu.bme.mit.gamma.expression.model.NotExpression
 import hu.bme.mit.gamma.expression.model.OrExpression
+import hu.bme.mit.gamma.expression.model.ParameterDeclaration
 import hu.bme.mit.gamma.expression.model.ReferenceExpression
 import hu.bme.mit.gamma.expression.model.SubtractExpression
 import hu.bme.mit.gamma.expression.model.TrueExpression
@@ -47,6 +49,7 @@ import uppaal.expressions.CompareOperator
 import uppaal.expressions.Expression
 import uppaal.expressions.ExpressionsFactory
 import uppaal.expressions.IdentifierExpression
+import uppaal.expressions.LiteralExpression
 import uppaal.expressions.LogicalOperator
 
 import static com.google.common.base.Preconditions.checkState
@@ -78,9 +81,21 @@ class ExpressionTransformer {
 	
 	def dispatch Expression transform(ArrayAccessExpression expression) {
 		val operand = expression.operand.transform
+		val index = expression.index.transform
 		if (operand instanceof IdentifierExpression) {
-			operand.index += expression.index.transform
+			operand.index += index
 			return operand
+		}
+		else if (operand instanceof uppaal.expressions.ArrayLiteralExpression) {
+			val elements = operand.elements
+			if (index instanceof LiteralExpression) {
+				val integerStringValue = index.text
+				val integerIndex = Integer.parseInt(integerStringValue)
+				return elements.get(integerIndex)
+			}
+			else if (elements.size == 1) { // Only one valid element could be accessed
+				return elements.head
+			}
 		}
 		throw new IllegalArgumentException("Uppaal supports the indexing of array variables only: " + operand)
 	}
@@ -102,6 +117,12 @@ class ExpressionTransformer {
 		val xStsDeclaration = expression.declaration
 		if (xStsDeclaration instanceof ConstantDeclaration) {
 			return xStsDeclaration.expression.transform
+		}
+		else if (xStsDeclaration instanceof ParameterDeclaration) {
+			val uppaalVariable = traceability.get(xStsDeclaration)
+			return createIdentifierExpression => [
+				it.identifier = uppaalVariable.variable.head
+			]
 		}
 		val xStsVariable = xStsDeclaration as VariableDeclaration
 		if (xStsVariable instanceof VariableDeclaration) {
@@ -149,6 +170,13 @@ class ExpressionTransformer {
 			uppaalOperands += xStsOperand.transform
 		}
 		return LogicalOperator.AND.createLogicalExpression(uppaalOperands)
+	}
+	
+	def dispatch Expression transform(ImplyExpression expression) {
+		val uppaalOperands = newArrayList
+		uppaalOperands += expression.leftOperand.clone.negate.transform
+		uppaalOperands += expression.rightOperand.transform
+		return LogicalOperator.OR.createLogicalExpression(uppaalOperands)
 	}
 	
 	def dispatch Expression transform(EqualityExpression expression) {

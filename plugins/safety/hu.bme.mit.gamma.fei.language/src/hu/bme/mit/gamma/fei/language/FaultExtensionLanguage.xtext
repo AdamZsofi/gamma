@@ -1,0 +1,289 @@
+/********************************************************************************
+ * Copyright (c) 2023 Contributors to the Gamma project
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * SPDX-License-Identifier: EPL-1.0
+ ********************************************************************************/
+grammar hu.bme.mit.gamma.fei.language.FaultExtensionLanguage with hu.bme.mit.gamma.statechart.language.StatechartLanguage
+
+import "http://www.mit.bme.hu/gamma/fei/Model"
+import "http://www.eclipse.org/emf/2002/Ecore" as ecore
+import "http://www.mit.bme.hu/gamma/statechart/Model/Interface" as interface
+import "http://www.mit.bme.hu/gamma/statechart/Model/Composite" as composite
+import "http://www.mit.bme.hu/gamma/expression/Model" as expression
+
+FaultExtensionInstructions returns FaultExtensionInstructions:
+	'import' imports+=[interface::Package | STRING]
+	'fault-extension' name=ID 'for' component=[interface::Component]
+	(faultSlices+=FaultSlice)*
+	(commonCauses=CommonCauses)?
+;
+
+FaultSlice returns FaultSlice:
+	'slice' name=ID 'affects' affectedElements+=ComponentInstanceStateExpression (',' affectedElements+=ComponentInstanceStateExpression)*
+		'with' (faultModes+=FaultMode)+
+		globalDynamics=GlobalDynamics?
+;
+
+FaultMode returns FaultMode:
+	'mode' name=ID ('('probability=Expression')')? (localDynamics=LocalDynamics)? effect=Effect
+;
+
+enum LocalDynamics returns LocalDynamics:
+				PERMANENT = 'permanent' | TRANSIENT = 'transient';
+
+Effect returns Effect:
+	StuckAtEffect | FrozenEffect | NonDeterminismEffect | NonDeterminismBooleanEffect |
+		ConditionalEffect | RampDownEffect | InvertedEffect | StuckAtFixedEffect | RandomEffect |
+			ErroneousEffect | DeltaOutEffect | DeltaInErroneousEffect | DeltaInRandomEffect
+	// TODO two other complex faults
+;
+
+StuckAtEffect returns StuckAtEffect:
+	'stuck-at' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		('occurrence' ':'  occurrence=Occurrence)?
+		('term' ':' term=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+FrozenEffect returns FrozenEffect:
+	{FrozenEffect} 'frozen' '{'
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+NonDeterminismEffect returns NonDeterminismEffect:
+	'nondeterminism' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		('occurrence' ':'  occurrence=Occurrence)?
+		('minimum' ':' minimum=Expression)
+		('maximum' ':' maximum=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+NonDeterminismBooleanEffect returns NonDeterminismBooleanEffect:
+	{NonDeterminismBooleanEffect} 'nondeterminism-boolean' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+ConditionalEffect returns ConditionalEffect:
+	'conditional' '{'
+		('occurrence' ':'  occurrence=Occurrence)?
+		('condition' ':' condition=Expression)
+		('then' ':' then=Expression)
+		('else' ':' else=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+RampDownEffect returns RampDownEffect:
+	'ramp-down' '{'
+		('delta' ':' delta=Expression)
+		('bound' ':' bound=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+InvertedEffect returns InvertedEffect:
+	{InvertedEffect} 'inverted' '{'
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+StuckAtFixedEffect returns StuckAtFixedEffect:
+	{StuckAtFixedEffect} 'stuck-at-fixed' '{'
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+RandomEffect returns RandomEffect:
+	{RandomEffect} 'random' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+ErroneousEffect returns ErroneousEffect:
+	{ErroneousEffect} 'erroneous' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+DeltaOutEffect returns DeltaOutEffect:
+	'delta-out' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		('delta' ':' delta=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+DeltaInRandomEffect returns DeltaInRandomEffect:
+	'delta-in-random' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		('delta' ':' delta=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+
+DeltaInErroneousEffect returns DeltaInErroneousEffect:
+	'delta-in-erroneous' '{'
+		('reference-mode' ':' termReferenceMode=TermReferenceMode)?
+		('delta' ':' delta=Expression)
+		(
+			('input' ':' input=ComponentInstanceStateExpression)
+			('varout' ':' varout=ComponentInstanceStateExpression)
+		)?
+		('failure-event' ':' failureEvent=ComponentInstanceEventReferenceExpression)?
+		(template+=Template)?
+	'}'
+;
+	
+Template returns Template:
+	SelfFixTemplate
+;
+
+SelfFixTemplate returns SelfFixTemplate:
+	{SelfFixTemplate} 'template' ':' 'self-fix' ('{'
+		('event' ':' selfFixEvent=ComponentInstanceEventReferenceExpression)?
+	'}')?
+;
+
+enum Occurrence returns Occurrence:
+				INSTANTANEOUS = 'instantaneous' | DELAYED = 'delayed';
+
+enum TermReferenceMode returns TermReferenceMode:
+				REFERENCE = 'reference' | VALUE = 'value';
+
+// Global dynamics
+
+GlobalDynamics returns GlobalDynamics:
+	{GlobalDynamics} 'global-dynamics'
+	// Potential addition events?
+	transitions+=FaultTransition+
+;
+
+FaultTransition returns FaultTransition:
+	'transition' 'from' source=FaultModeStateReference 'to' target=FaultModeStateReference
+			('when' trigger=FaultTransitionTrigger)? ('[' guard=Expression ']')?
+;
+
+FaultModeStateReference returns FaultModeStateReference:
+	faultMode=[FaultMode] '.' state=FaultModeState
+;
+
+FaultTransitionTrigger returns FaultTransitionTrigger:
+	faultMode=[FaultMode] '.' event=FaultEvent
+;
+
+enum FaultModeState returns FaultModeState:
+				FAULTY = 'fault' | NOMINAL = 'nominal';
+				
+enum FaultEvent returns FaultEvent:
+				FAILURE = 'failure' | SELF_FIX = 'self-fix';
+
+// Common causes
+
+CommonCauses returns CommonCauses:
+	'common-causes' commonCauses+=CommonCause+
+;
+
+CommonCause returns CommonCause:
+	'cause' name=ID probability=CommonCauseProbability? modes+=CommonCauseMode+
+;
+
+CommonCauseProbability returns CommonCauseProbability:
+	'(' value=Expression ')' // TODO latent faults
+;
+
+CommonCauseMode returns CommonCauseMode:
+	'mode' faultSlice=[FaultSlice] '.' faultMode=[FaultMode] range=CommonCauseRange
+;
+
+CommonCauseRange returns CommonCauseRange:
+	{CommonCauseRange}
+	'simultaneously' |
+	('after' lowerBound=Expression) |
+	('within' higherBound=Expression) |
+	('between' lowerBound=Expression '..' higherBound=Expression)
+;
+
+// Literals
+
+@Override
+PrimaryExpression returns expression::Expression:
+	LiteralExpression |
+	ComponentInstanceStateExpression |
+	'(' Expression ')'
+;
+
+//

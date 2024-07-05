@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -11,6 +11,7 @@
 package hu.bme.mit.gamma.xsts.uppaal.transformation
 
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
+import hu.bme.mit.gamma.expression.util.ExpressionEvaluator
 import hu.bme.mit.gamma.uppaal.util.AssignmentExpressionCreator
 import hu.bme.mit.gamma.uppaal.util.NtaBuilder
 import hu.bme.mit.gamma.util.GammaEcoreUtil
@@ -20,6 +21,7 @@ import hu.bme.mit.gamma.xsts.model.AssumeAction
 import hu.bme.mit.gamma.xsts.model.EmptyAction
 import hu.bme.mit.gamma.xsts.model.HavocAction
 import hu.bme.mit.gamma.xsts.model.IfAction
+import hu.bme.mit.gamma.xsts.model.LoopAction
 import hu.bme.mit.gamma.xsts.model.NonDeterministicAction
 import hu.bme.mit.gamma.xsts.model.SequentialAction
 import hu.bme.mit.gamma.xsts.model.VariableDeclarationAction
@@ -33,7 +35,7 @@ import uppaal.templates.LocationKind
 import static hu.bme.mit.gamma.uppaal.util.XstsNamings.*
 
 import static extension de.uni_paderborn.uppaal.derivedfeatures.UppaalModelDerivedFeatures.*
-import static extension hu.bme.mit.gamma.xsts.derivedfeatures.XstsDerivedFeatures.*
+import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
 import static extension java.lang.Math.*
 
 class CfaActionTransformer {
@@ -48,9 +50,10 @@ class CfaActionTransformer {
 	
 	protected final extension HavocHandler havocHandler = HavocHandler.INSTANCE
 	protected final extension XstsActionUtil xStsActionUtil = XstsActionUtil.INSTANCE
+	protected final extension ExpressionEvaluator evaluator = ExpressionEvaluator.INSTANCE
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	
-	new (NtaBuilder ntaBuilder, Traceability traceability) {
+	new(NtaBuilder ntaBuilder, Traceability traceability) {
 		this.ntaBuilder = ntaBuilder
 		this.traceability = traceability
 		this.variableTransformer = new VariableTransformer(ntaBuilder, traceability)
@@ -87,6 +90,7 @@ class CfaActionTransformer {
 			newSource = newSource.createUpdateEdge(nextCommittedLocationName,
 					uppaalLhs, uppaalRhs)
 		}
+		
 		return newSource
 	}
 	
@@ -128,6 +132,7 @@ class CfaActionTransformer {
 		transientVariables += uppaalVariable
 		val xStsInitialValue = xStsVariable.initialValue
 		val uppaalRhs = xStsInitialValue?.transform
+		
 		return source.createUpdateEdge(nextCommittedLocationName, uppaalVariable, uppaalRhs)
 	}
 	
@@ -141,6 +146,7 @@ class CfaActionTransformer {
 		val edge = source.createEdgeCommittedSource(nextCommittedLocationName)
 		val uppaalExpression = action.assumption.transform
 		edge.guard = uppaalExpression
+		
 		return edge.target
 	}
 	
@@ -150,6 +156,7 @@ class CfaActionTransformer {
 		for (xStsAction : xStsActions) {
 			actualSource = xStsAction.transformAction(actualSource)
 		}
+		
 		return actualSource
 	}
 	
@@ -164,18 +171,96 @@ class CfaActionTransformer {
 		for (choiceTarget : targets) {
 			choiceTarget.createEdge(target)
 		}
+		
 		return target
 	}
 	
 	protected def dispatch Location transformAction(IfAction action, Location source) {
-		val clonedAction = action.clone
-		val xStsConditions = clonedAction.conditions
-		val xStsActions = clonedAction.branches
+//		val clonedAction = action.clone
+//		val xStsConditions = clonedAction.conditions
+//		val xStsActions = clonedAction.branches
+//		
+//		// Tracing back to NonDeterministicAction transformation
+//		val proxy = xStsConditions.createChoiceActionWithExclusiveBranches(xStsActions)
+//		
+//		return proxy.transformAction(source)
 		
-		// Tracing back to NonDeterministicAction transformation
-		val proxy = xStsConditions.createChoiceActionWithExclusiveBranches(xStsActions)
+		val condition = action.condition
 		
-		return proxy.transformAction(source)
+		val positiveCondition = condition.transform
+		val negativeCondition = condition.clone
+				.createNotExpression.transform
+		
+		val thenEdge = source.createEdgeCommittedSource(nextCommittedLocationName)
+		thenEdge.guard = positiveCondition
+		val thenEdgeTarget = thenEdge.target
+		
+		val thenAction = action.then
+		val thenActionTarget = thenAction.transformAction(thenEdgeTarget)
+		
+		val elseEdge = source.createEdgeCommittedSource(nextCommittedLocationName)
+		elseEdge.guard = negativeCondition
+		val elseEdgeTarget = elseEdge.target
+		
+		val elseAction = action.^else
+		val elseActionTarget = (elseAction !== null) ? elseAction.transformAction(elseEdgeTarget) : elseEdgeTarget
+		
+		elseActionTarget.createEdge(thenActionTarget)
+		
+		return thenActionTarget
+	}
+	
+	protected def dispatch Location transformAction(LoopAction action, Location source) {
+		val parameter = action.iterationParameterDeclaration
+		val range = action.range
+		val actionInLoop = action.action
+		
+		val left = range.left
+		val right = range.right
+		
+		// Inlineable?
+		if (range.evaluable) {
+			val leftInt = left.evaluateInteger
+			val rightInt = right.evaluateInteger
+			
+			val body = newArrayList
+			for (var i = leftInt; i <= rightInt /* Right is inclusive */; i++) {
+				val index = i.toIntegerLiteral
+				val clonedBody = actionInLoop.clone
+				
+				parameter.inlineReferences(index, clonedBody)
+				
+				body += clonedBody
+			}
+			val sequentialAction = body.createSequentialAction
+			
+			return sequentialAction.transformAction(source)
+		}
+		// Non-inlineable
+		val uppaalVariable = parameter.transformAndTraceParameter
+		uppaalVariable.extendNameWithHash // Needed for local declarations
+		transientVariables += uppaalVariable
+
+		val initEdge = source.createEdgeCommittedSource(nextCommittedLocationName)
+		initEdge.update += uppaalVariable.createAssignmentExpression(
+				left.transform)
+		val loopSource = initEdge.target
+		
+		// In-loop part
+		val inLoopEdge = loopSource.createEdgeCommittedSource(nextCommittedLocationName)
+		inLoopEdge.guard = uppaalVariable.createLessEqualityExpression(right.transform)
+		val inLoopLocation = inLoopEdge.target
+		
+		val inLoopEnd = actionInLoop.transformAction(inLoopLocation)
+		val iterationCountIncrementEdge = inLoopEnd.createEdge(loopSource)
+		iterationCountIncrementEdge.update += uppaalVariable.createIncrementExpression
+		
+		// Out-loop part
+		val outLoopEdge = loopSource.createEdgeCommittedSource(nextCommittedLocationName)
+		outLoopEdge.guard = uppaalVariable.createGreaterExpression(right.transform)
+		val outLoopLocation = outLoopEdge.target
+		
+		return outLoopLocation
 	}
 	
 	// Resetting

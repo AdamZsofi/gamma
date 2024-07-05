@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -12,13 +12,12 @@ package hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer
 
 import hu.bme.mit.gamma.expression.model.AndExpression
 import hu.bme.mit.gamma.expression.model.ArithmeticExpression
-import hu.bme.mit.gamma.expression.model.BooleanExpression
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.expression.model.FalseExpression
+import hu.bme.mit.gamma.expression.model.LogicExpression
 import hu.bme.mit.gamma.expression.model.MultiaryExpression
 import hu.bme.mit.gamma.expression.model.OrExpression
 import hu.bme.mit.gamma.expression.model.TrueExpression
-import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.expression.util.ExpressionEvaluator
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.xsts.model.AbstractAssignmentAction
@@ -28,6 +27,7 @@ import hu.bme.mit.gamma.xsts.model.AssumeAction
 import hu.bme.mit.gamma.xsts.model.AtomicAction
 import hu.bme.mit.gamma.xsts.model.CompositeAction
 import hu.bme.mit.gamma.xsts.model.EmptyAction
+import hu.bme.mit.gamma.xsts.model.HavocAction
 import hu.bme.mit.gamma.xsts.model.IfAction
 import hu.bme.mit.gamma.xsts.model.LoopAction
 import hu.bme.mit.gamma.xsts.model.MultiaryAction
@@ -38,8 +38,8 @@ import hu.bme.mit.gamma.xsts.model.SequentialAction
 import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
 import hu.bme.mit.gamma.xsts.model.XTransition
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
-import java.util.Collection
 import java.util.List
+import java.util.logging.Logger
 import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkState
@@ -57,6 +57,8 @@ class ActionOptimizer {
 	// Model factories
 	protected final ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE
 	protected final extension XSTSModelFactory xStsFactory = XSTSModelFactory.eINSTANCE
+	
+	protected final Logger logger = Logger.getLogger("GammaLogger")
 	
 	def optimize(Iterable<? extends XTransition> transitions) {
 		val optimizedTransitions = newArrayList
@@ -77,10 +79,15 @@ class ActionOptimizer {
 	}
 	
 	def optimize(Action action) {
+		val containsParallelAction = action.isOrContainsTypesTransitively(ParallelAction)
+		
+		var i = 0
 		var Action oldXStsAction
 		var Action newXStsAction = action
 		// Until the action cannot be optimized any more
 		while (!oldXStsAction.helperEquals(newXStsAction)) {
+			logger.info("Starting optimization iteration " + i++)
+			
 			oldXStsAction = newXStsAction.clone
 			newXStsAction = newXStsAction
 				/* Cannot use "clone" as local variable actions contain variable declarations and
@@ -95,11 +102,15 @@ class ActionOptimizer {
 				
 			newXStsAction.optimizeAssignmentActions
 			newXStsAction.deleteTrivialNonDeterministicActions
-			newXStsAction = newXStsAction.optimizeParallelActions // Might be resource intensive
+			if (containsParallelAction) {
+				newXStsAction = newXStsAction.optimizeParallelActions // Might be resource intensive
+			}
 			newXStsAction.deleteUnnecessaryAssumeActions // Not correct in other transformation implementations
 			newXStsAction.deleteDefinitelyFalseBranches
+			newXStsAction.deleteDefinitelyFalseBranchesFromAssumptions
 			newXStsAction.optimizeExpressions // Could be extracted to the expression metamodel?
 		}
+		
 		return newXStsAction
 	}
 	
@@ -136,10 +147,10 @@ class ActionOptimizer {
 	}
 	
 	protected def dispatch Action simplifyCompositeActions(MultiaryAction action) {
-		var xStsActionList = newLinkedList
+		var xStsActionList = newArrayList
 		xStsActionList += action.actions
 		if (xStsActionList.size > 1) {
-			val remainingXStsActions = newLinkedList
+			val remainingXStsActions = newArrayList
 			// Sequence order must be reserved
 			xStsActionList.removeIf[it instanceof EmptyAction || 
 				it instanceof MultiaryAction && (it as MultiaryAction).actions.forall[it instanceof EmptyAction] ||
@@ -233,7 +244,7 @@ class ActionOptimizer {
 	protected def dispatch List<Action> simplifySequentialActions(SequentialAction action, boolean isTop) {
 		val xStsSubactions = newArrayList
 		xStsSubactions += action.actions
-		val newXStsActions = newLinkedList
+		val newXStsActions = newArrayList
 		// Additional checks - is a definitely false assumption there
 		if (xStsSubactions.filter(AssumeAction).exists[it.assumption.definitelyFalseExpression]) {
 			// This action cannot be executed
@@ -320,7 +331,7 @@ class ActionOptimizer {
 	protected def dispatch List<Action> simplifyParallelActions(ParallelAction action, boolean isTop) {
 		val xStsSubactions = newArrayList
 		xStsSubactions += action.actions
-		val newXStsActions = newLinkedList
+		val newXStsActions = newArrayList
 		for (xStsSubaction : xStsSubactions) {
 			if (xStsSubaction instanceof ParallelAction) {
 				// Subactions of a ParallelAction
@@ -398,7 +409,7 @@ class ActionOptimizer {
 	protected def dispatch List<Action> simplifyOrthogonalActions(OrthogonalAction action, boolean isTop) {
 		val xStsSubactions = newArrayList
 		xStsSubactions += action.actions
-		val newXStsActions = newLinkedList
+		val newXStsActions = newArrayList
 		for (xStsSubaction : xStsSubactions) {
 			if (xStsSubaction instanceof OrthogonalAction) {
 				// Subactions of a OrthogonalAction
@@ -476,7 +487,7 @@ class ActionOptimizer {
 	 */
 	protected def dispatch List<Action> simplifyNonDeterministicActions(NonDeterministicAction action, boolean isTop) {
 		val actions = action.actions
-		val newXStsActions = newLinkedList
+		val newXStsActions = newArrayList
 		// Removing same branches
 		val coveredXStsActions = newArrayList
 		for (var i = 0; i < actions.size - 1; i++) {
@@ -513,7 +524,7 @@ class ActionOptimizer {
 		val xStsSubactions = newArrayList
 		xStsSubactions += action.actions
 		// Now all parallel actions are optimized to sequential actions
-		if (true || action.isOptimizableToSequentialAction) {
+		if (action.areSubactionsOrthogonal) {
 			return createSequentialAction => [
 				for (xStsSubaction : xStsSubactions) {
 					it.actions += xStsSubaction.optimizeParallelActions
@@ -558,31 +569,6 @@ class ActionOptimizer {
 		return action
 	}
 	
-	protected def boolean isOptimizableToSequentialAction(ParallelAction action) {
-		val List<Collection<VariableDeclaration>> readVariables = newLinkedList
-		val List<Collection<VariableDeclaration>> writtenVariables = newLinkedList
-		for (var i = 0; i < action.actions.size; i++) {
-			val xStsSubaction = action.actions.get(i)
-			val newlyWrittenVariables = xStsSubaction.writtenVariables
-			writtenVariables += newlyWrittenVariables
-			val newlyReadVariables = newHashSet
-			newlyReadVariables += xStsSubaction.readVariables
-			newlyReadVariables -= newlyWrittenVariables
-			readVariables += newlyReadVariables
-			for (var j = 0; j < i; j++) {
-				val previouslyReadVariables = readVariables.get(j)
-				val previouslyWrittenVariables = writtenVariables.get(j)
-				// If a written variable is read or written somewhere, the parallel action cannot be optimized
-				if (previouslyReadVariables.exists[newlyWrittenVariables.contains(it)] ||
-						previouslyWrittenVariables.exists[newlyWrittenVariables.contains(it)] ||
-						previouslyWrittenVariables.exists[newlyReadVariables.contains(it)]) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	
 	// Assignment actions
 	
 	protected def dispatch void optimizeAssignmentActions(Action action) {
@@ -610,11 +596,12 @@ class ActionOptimizer {
 	
 	protected def dispatch void optimizeAssignmentActions(SequentialAction action) {
 		val xStsActions = action.actions
-		val removeableXStsActions = <AbstractAssignmentAction>newLinkedList
+		val removeableXStsActions = <AbstractAssignmentAction>newArrayList
 		for (var i = 0; i < xStsActions.size; i++) {
 			val xStsFirstAction = xStsActions.get(i)
 			if (xStsFirstAction instanceof AbstractAssignmentAction) {
 				val lhs = xStsFirstAction.lhs
+				val variable = lhs.accessedDeclaration
 				var foundAssignmentToTheSameVariable = false
 				for (var j = i + 1; j < xStsActions.size && !foundAssignmentToTheSameVariable; j++) {
 					val xStsSecondAction = xStsActions.get(j)
@@ -624,9 +611,9 @@ class ActionOptimizer {
 							var isVariableRead = false
 							for (var k = i + 1; k <= j && !isVariableRead; k++) {
 								val xStsInBetweenAction = xStsActions.get(k)
-								val variable = lhs.accessedDeclaration
 								// Not perfect for arrays: a[0] := 1; b := a[2]; a[0] := 2;
-								if (xStsInBetweenAction.readVariables.contains(variable)) {
+								val readVariables = xStsInBetweenAction.readVariables
+								if (readVariables.contains(variable)) {
 									isVariableRead = true
 								}
 							}
@@ -647,7 +634,8 @@ class ActionOptimizer {
 	}
 	
 	protected def optimizeIfActions(Action action) {
-		val block = action.createSequentialAction // Due to replacement issues
+		val block = (action instanceof SequentialAction) ? action :
+				action.createSequentialAction // Due to replacement issues
 		
 		val xStsIfActions = action.getSelfAndAllContentsOfType(IfAction)
 		for (xStsIfAction : xStsIfActions) {
@@ -656,7 +644,7 @@ class ActionOptimizer {
 			val xStsElseAction = xStsIfAction.^else
 			
 			if (xStsThenAction.nullOrEmptyAction && xStsElseAction.nullOrEmptyAction) {
-				xStsIfAction.remove
+				xStsIfAction.replaceWithEmptyAction
 			}
 			else if (xStsCondition.definitelyTrueExpression) {
 				xStsThenAction.replace(xStsIfAction)
@@ -672,6 +660,7 @@ class ActionOptimizer {
 				xStsIfAction.^else = createEmptyAction
 			}
 		}
+		
 		return block
 	}
 	
@@ -679,8 +668,8 @@ class ActionOptimizer {
 	
 	protected def void deleteUnnecessaryAssumeActions(Action action) {
 		for (assumeAction : action.getAllContentsOfType(AssumeAction)) {
-			if (assumeAction.isUnnecessary) {
-				assumeAction.delete
+			if (assumeAction.unnecessary) {
+				assumeAction.remove
 			}
 		}
 	}
@@ -695,9 +684,34 @@ class ActionOptimizer {
 		val container = action.eContainer
 		if (container instanceof SequentialAction) {
 			val actions = container.actions
-			return actions.indexOf(action) != 0
+			val index = actions.indexOf(action)
+			val conainerContainer = container.eContainer
+			// For choices, these are needed
+			if (index == 0 && conainerContainer instanceof NonDeterministicAction) {
+				return false
+			}
+			// Right after havocs, they are needed
+			try {
+				val previousAction = actions.get(index - 1)
+				if (previousAction instanceof HavocAction) {
+					return false
+				}
+			} catch (IndexOutOfBoundsException e) {}
 		}
-		return false
+		if (container instanceof NonDeterministicAction) {
+			return false // We must not delete assumptions from choices, because that may lead to a deadlock
+		}
+		
+		if (action.isInvariant) {
+			return false
+		}
+		
+		val assumption = action.assumption
+		if (assumption.definitelyTrueExpression) {
+			return true
+		}
+		
+		return false // TODO every outcome is false apart from the last branch; shouldn't this be true?
 	}
 	
 	// Non deterministic actions
@@ -719,7 +733,7 @@ class ActionOptimizer {
 	}
 	
 	protected def dispatch void deleteTrivialNonDeterministicActions(MultiaryAction action) {
-		val copiedXStsActions = newLinkedList
+		val copiedXStsActions = newArrayList
 		copiedXStsActions += action.actions
 		for (copiedXStsAction : copiedXStsActions) {
 			if (copiedXStsAction instanceof NonDeterministicAction) {
@@ -794,14 +808,55 @@ class ActionOptimizer {
 		val xStsSubactions = newArrayList
 		xStsSubactions += action.actions
 		for (branch : xStsSubactions) {
-			val firstAction = branch.firstAtomicAction
-			if (firstAction instanceof AssumeAction) {
-				if (firstAction.isDefinitelyFalseAssumeAction) {
-					branch.remove
+			try {
+				val firstAction = branch.firstAtomicAction
+				if (firstAction instanceof AssumeAction) {
+					if (firstAction.isDefinitelyFalseAssumeAction) {
+						branch.replaceWithEmptyAction
+					}
+					else {
+						branch.deleteDefinitelyFalseBranches
+					}
+				}
+			} catch (IllegalArgumentException e) {
+				// Branch does not contain a 'firstAtomicAction' - full nondeterministic
+				// continue...
+				branch.deleteDefinitelyFalseBranches
+			}
+		}
+	}
+	
+	//
+	
+	protected def void deleteDefinitelyFalseBranchesFromAssumptions(Action action) {
+		val assumeActions = action.getSelfAndAllContentsOfType(AssumeAction)
+		val falseAssumeActions = assumeActions.filter[it.definitelyFalseAssumeAction]
+		for (assumeAction : falseAssumeActions) {
+			val nondeterministicBranch = assumeAction.getChildOfContainerOfType(NonDeterministicAction)
+			val ifBranch = assumeAction.getChildOfContainerOfType(IfAction)
+			var targetIf = true
+			if (nondeterministicBranch !== null && ifBranch !== null) {
+				targetIf = nondeterministicBranch.containsTransitively(ifBranch)
+			}
+			if (ifBranch !== null && targetIf) {
+				// Note that the (negated) condition should be prepended to the then or else branch
+				// But we don't do this, as we expect correct models
+				val ifAction = ifBranch.eContainer as IfAction
+				val then = ifAction.then
+				val _else = ifAction.^else
+				
+				if (ifBranch === then) {
+					_else.replace(ifAction)
 				}
 				else {
-					branch.deleteDefinitelyFalseBranches
+					then.replace(ifAction)
 				}
+			}
+			else if (nondeterministicBranch !== null) {
+				nondeterministicBranch.remove
+			}
+			else {
+				// Both are null, so the whole transition must be removed: should not happen in practice
 			}
 		}
 	}
@@ -811,7 +866,7 @@ class ActionOptimizer {
 	protected def void optimizeExpressions(Action action) {
 		val eObjects = action.getAllContentsOfType(EObject)
 		
-		val booleanExpressions = eObjects.filter(BooleanExpression)
+		val booleanExpressions = eObjects.filter(LogicExpression)
 		for (booleanExpression : booleanExpressions) {
 			if (booleanExpression.definitelyFalseExpression) {
 				expressionFactory.createFalseExpression.replace(booleanExpression)

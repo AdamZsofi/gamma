@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  * 
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -59,6 +59,17 @@ class StatechartToPlantUmlTransformer {
 
 	def String execute() '''
 		@startuml
+		
+		skin rose ««« !theme plain
+
+		skinparam backgroundcolor transparent
+		skinparam legend {
+			BackgroundColor lightgrey
+		}
+
+		skinparam nodesep 30
+		skinparam ranksep 30
+		skinparam padding 5
 			«statechart.listVariablesInNote»
 			«statechart.mainRegionSearch»
 		@enduml
@@ -249,8 +260,13 @@ class StatechartToPlantUmlTransformer {
 	 */
 	protected def stateActionsSearch(StateNode statenode) {
 		val state = statenode as State
-		if (!(state.entryActions.empty) || !(state.exitActions.empty)) {
+		if (!(state.entryActions.empty) || !(state.exitActions.empty) || !(state.invariants.empty)) {
 			val result = '''
+				«IF !(state.invariants.empty)»
+					«FOR invariant: state.invariants»
+						«statenode.name» : invariant «invariant.serialize»
+					«ENDFOR»
+				«ENDIF»
 				«IF !(state.entryActions.empty)»
 					«FOR entry: state.entryActions»
 						«statenode.name» : entry / «entry.transformAction»
@@ -370,7 +386,8 @@ class StatechartToPlantUmlTransformer {
 			arrow = "-->"
 		}
 		return '''
-			«transition.sourceText» «arrow» «target.name»«IF !transition.empty» : «ENDIF»«IF trigger !== null»«trigger.transformTrigger»«ENDIF» «IF guard !== null»\n[«guard.serialize»]«ENDIF»«FOR effect : effects BEFORE ' /\\n' SEPARATOR '\\n'»«effect.transformAction»«ENDFOR»
+			«transition.sourceText» «arrow» «target.name»«IF !transition.empty» : «ENDIF»«IF trigger !== null»«trigger.transformTrigger»«ENDIF» «IF guard !== null»\n[«guard.serialize
+				.replaceAll("\\|\\|", "||\\\\n").replaceAll("\\&\\&", "&&\\\\n")»]«ENDIF»«FOR effect : effects BEFORE ' /\\n' SEPARATOR '\\n'»«effect.transformAction»«ENDFOR»
 		'''
 	}
 
@@ -396,8 +413,9 @@ class StatechartToPlantUmlTransformer {
 		val parameterDeclarations = statechart.parameterDeclarations
 		val variableDeclarations = statechart.variableDeclarations
 		val timeoutDeclarations = statechart.timeoutDeclarations
+		val invariants = statechart.invariants
 		
-		if (variableDeclarations.empty && timeoutDeclarations.empty && parameterDeclarations.empty) {
+		if (variableDeclarations.empty && timeoutDeclarations.empty && parameterDeclarations.empty && invariants.empty) {
 			return ''''''
 		}
 		return '''
@@ -411,9 +429,11 @@ class StatechartToPlantUmlTransformer {
 				«FOR timeout : timeoutDeclarations»
 					timeout «timeout.name»
 				«ENDFOR»
+				«FOR invariant : invariants»
+				    invariant «invariant.serialize»
+				«ENDFOR»
 			endlegend
 		'''
-	
 	}
 
 }

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -23,7 +23,11 @@ import org.eclipse.emf.ecore.EReference;
 import org.eclipse.xtext.scoping.IScope;
 import org.eclipse.xtext.scoping.Scopes;
 import org.eclipse.xtext.scoping.impl.SimpleScope;
+import org.eclipse.xtext.xbase.lib.Functions.Function1;
+import org.eclipse.xtext.xbase.lib.IterableExtensions;
 
+import com.google.common.base.Objects;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 import hu.bme.mit.gamma.action.model.Action;
@@ -32,11 +36,17 @@ import hu.bme.mit.gamma.expression.model.Expression;
 import hu.bme.mit.gamma.expression.model.ExpressionModelPackage;
 import hu.bme.mit.gamma.expression.model.FieldDeclaration;
 import hu.bme.mit.gamma.expression.model.ParametricElement;
+import hu.bme.mit.gamma.expression.model.TypeDeclaration;
 import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter;
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponent;
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponentInstance;
 import hu.bme.mit.gamma.statechart.composite.CascadeCompositeComponent;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstance;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceElementReferenceExpression;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceEventParameterReferenceExpression;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceEventReferenceExpression;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceReferenceExpression;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceStateReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.CompositeComponent;
 import hu.bme.mit.gamma.statechart.composite.CompositeModelPackage;
 import hu.bme.mit.gamma.statechart.composite.ControlSpecification;
@@ -55,6 +65,7 @@ import hu.bme.mit.gamma.statechart.interface_.Event;
 import hu.bme.mit.gamma.statechart.interface_.EventParameterReferenceExpression;
 import hu.bme.mit.gamma.statechart.interface_.Interface;
 import hu.bme.mit.gamma.statechart.interface_.InterfaceModelPackage;
+import hu.bme.mit.gamma.statechart.interface_.InterfaceParameterReferenceExpression;
 import hu.bme.mit.gamma.statechart.interface_.InterfaceRealization;
 import hu.bme.mit.gamma.statechart.interface_.Package;
 import hu.bme.mit.gamma.statechart.interface_.Port;
@@ -62,6 +73,7 @@ import hu.bme.mit.gamma.statechart.phase.InstanceVariableReference;
 import hu.bme.mit.gamma.statechart.phase.MissionPhaseStateAnnotation;
 import hu.bme.mit.gamma.statechart.phase.PhaseModelPackage;
 import hu.bme.mit.gamma.statechart.statechart.AnyPortEventReference;
+import hu.bme.mit.gamma.statechart.statechart.CompositeElement;
 import hu.bme.mit.gamma.statechart.statechart.PortEventReference;
 import hu.bme.mit.gamma.statechart.statechart.RaiseEventAction;
 import hu.bme.mit.gamma.statechart.statechart.Region;
@@ -114,21 +126,22 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				Component type = StatechartModelDerivedFeatures.getDerivedType(instance);
 				if (type instanceof StatechartDefinition) {
 					StatechartDefinition statechart = (StatechartDefinition) type;
-					return Scopes.scopeFor(statechart.getVariableDeclarations());
+					return Scopes.scopeFor(
+							statechart.getVariableDeclarations());
 				}
 			}
 			// Transitions
-			if (context instanceof Transition && (reference == StatechartModelPackage.Literals.TRANSITION__SOURCE_STATE
+			if (context instanceof Transition transition && (reference == StatechartModelPackage.Literals.TRANSITION__SOURCE_STATE
 					|| reference == StatechartModelPackage.Literals.TRANSITION__TARGET_STATE)) {
-				Transition transition = (Transition) context;
 				Collection<StateNode> candidates = stateNodesForTransition(transition);
 				return Scopes.scopeFor(candidates);
 			}
-			if (context instanceof PortEventReference && reference == StatechartModelPackage.Literals.PORT_EVENT_REFERENCE__EVENT) {
-				Port port = ((PortEventReference) context).getPort();
+			if (context instanceof PortEventReference portEventReference && reference == StatechartModelPackage.Literals.PORT_EVENT_REFERENCE__EVENT) {
+				Port port = portEventReference.getPort();
 				Interface _interface = port.getInterfaceRealization().getInterface();
 				// Not only in events are returned as less-aware users tend to write out events on triggers
-				return Scopes.scopeFor(StatechartModelDerivedFeatures.getAllEvents(_interface));
+				return Scopes.scopeFor(
+						StatechartModelDerivedFeatures.getAllEvents(_interface));
 			}
 			if (reference == StatechartModelPackage.Literals.PORT_EVENT_REFERENCE__EVENT) {
 				// If the branch above does not work
@@ -139,33 +152,32 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				// Not only in events are returned as less-aware users tend to write out events on triggers
 				return Scopes.scopeFor(events);
 			}
-			if (context instanceof RaiseEventAction
+			if (context instanceof RaiseEventAction raiseEventAction
 					&& reference == StatechartModelPackage.Literals.RAISE_EVENT_ACTION__EVENT) {
-				RaiseEventAction raiseEventAction = (RaiseEventAction) context;
 				Port port = raiseEventAction.getPort();
 				Interface _interface = port.getInterfaceRealization().getInterface();
 				// Not only in events are returned as less-aware users tend to write in events on actions
-				return Scopes.scopeFor(StatechartModelDerivedFeatures.getAllEvents(_interface));
+				return Scopes.scopeFor(
+						StatechartModelDerivedFeatures.getAllEvents(_interface));
 			}
 			/* Without such scoping rules, the following exception is thrown:
 			 * Caused By: org.eclipse.xtext.conversion.ValueConverterException: ID 'Test.testIn.testInValue'
 			 * contains invalid characters: '.' (0x2e) */
 			// Valueof
-			if (context instanceof EventParameterReferenceExpression
-					&& reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__PORT) {
+			if (context instanceof EventParameterReferenceExpression &&
+					reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__PORT) {
 				Component component = StatechartModelDerivedFeatures.getContainingComponent(context);				
 				return Scopes.scopeFor(component.getPorts());
 			}
-			if (context instanceof EventParameterReferenceExpression
-					&& reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__EVENT) {
-				EventParameterReferenceExpression expression = (EventParameterReferenceExpression) context;
+			if (context instanceof EventParameterReferenceExpression expression &&
+					reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__EVENT) {
 				checkState(expression.getPort() != null);
 				Port port = expression.getPort();
-				return Scopes.scopeFor(StatechartModelDerivedFeatures.getInputEvents(port));
+				return Scopes.scopeFor(
+						StatechartModelDerivedFeatures.getInputEvents(port));
 			}
-			if (context instanceof EventParameterReferenceExpression
-					&& reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__PARAMETER) {
-				EventParameterReferenceExpression expression = (EventParameterReferenceExpression) context;
+			if (context instanceof EventParameterReferenceExpression expression &&
+					reference == InterfaceModelPackage.Literals.EVENT_PARAMETER_REFERENCE_EXPRESSION__PARAMETER) {
 				checkState(expression.getPort() != null);
 				Event event = expression.getEvent();
 				return Scopes.scopeFor(event.getParameterDeclarations());
@@ -175,19 +187,30 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				Collection<Region> allRegions = StatechartModelDerivedFeatures.getAllRegions(statechart);
 				return Scopes.scopeFor(allRegions);
 			}
-			if (context instanceof StateReferenceExpression &&
+			if (context instanceof StateReferenceExpression stateReferenceExpression &&
 					reference == StatechartModelPackage.Literals.STATE_REFERENCE_EXPRESSION__STATE) {
-				StateReferenceExpression stateReferenceExpression = (StateReferenceExpression) context;
 				Region region = stateReferenceExpression.getRegion();
 				List<State> states = StatechartModelDerivedFeatures.getStates(region);
 				return Scopes.scopeFor(states);
+			}
+			if (context instanceof InterfaceParameterReferenceExpression interfaceParameterReferenceExpression) {
+				if (reference == InterfaceModelPackage.Literals.INTERFACE_PARAMETER_REFERENCE_EXPRESSION__PARAMETER) {
+					checkState(interfaceParameterReferenceExpression.getEvent() != null);
+					Event event = interfaceParameterReferenceExpression.getEvent();					
+					return Scopes.scopeFor(
+							event.getParameterDeclarations());
+				} else if (reference == InterfaceModelPackage.Literals.INTERFACE_PARAMETER_REFERENCE_EXPRESSION__EVENT) {
+					Interface _interface = StatechartModelDerivedFeatures.getContainingInterface(interfaceParameterReferenceExpression);	
+					return Scopes.scopeFor(
+							StatechartModelDerivedFeatures.getAllEvents(_interface));
+				}
 			}
 
 			// Composite system
 
 			// Ports
 			if (context instanceof InterfaceRealization && reference == InterfaceModelPackage.Literals.INTERFACE_REALIZATION__INTERFACE) {
-				Package gammaPackage = (Package) context.eContainer().eContainer().eContainer();
+				Package gammaPackage = StatechartModelDerivedFeatures.getContainingPackage(context);
 				if (!gammaPackage.getImports().isEmpty()) {
 					Set<Interface> interfaces = new HashSet<Interface>();
 					gammaPackage.getImports().stream().map(it -> it.getInterfaces()).forEach(it -> interfaces.addAll(it));
@@ -200,26 +223,21 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				List<Port> ports = StatechartModelDerivedFeatures.getAllPorts(type);
 				return Scopes.scopeFor(ports);
 			}
-			if (context instanceof InstancePortReference && reference == CompositeModelPackage.Literals.INSTANCE_PORT_REFERENCE__PORT) {
-				InstancePortReference portInstance = (InstancePortReference) context;
+			if (context instanceof InstancePortReference portInstance && reference == CompositeModelPackage.Literals.INSTANCE_PORT_REFERENCE__PORT) {
 				ComponentInstance instance = portInstance.getInstance();
-				Component type = (instance instanceof SynchronousComponentInstance) ? 
-						((SynchronousComponentInstance) instance).getType() : 
-							((AsynchronousComponentInstance) instance).getType();
+				Component type = StatechartModelDerivedFeatures.getDerivedType(instance);
 				if (type == null) {
 					return super.getScope(context, reference); 
 				}
 				List<Port> ports = new ArrayList<Port>(type.getPorts());
 				// In case of wrappers, we added the ports of the wrapped component as well
-				if (type instanceof AsynchronousAdapter) {
-					AsynchronousAdapter wrapper = (AsynchronousAdapter) type;
+				if (type instanceof AsynchronousAdapter wrapper) {
 					ports.addAll(wrapper.getWrappedComponent().getType().getPorts());
 				}				
 				return Scopes.scopeFor(ports);
 			}
-			if (context instanceof CompositeComponent && reference == CompositeModelPackage.Literals.INSTANCE_PORT_REFERENCE__PORT) {
+			if (context instanceof CompositeComponent component && reference == CompositeModelPackage.Literals.INSTANCE_PORT_REFERENCE__PORT) {
 				// If the branch above does not handle it
-				CompositeComponent component = (CompositeComponent) context;
 				List<? extends ComponentInstance> components = StatechartModelDerivedFeatures.getDerivedComponents(component);
 				Collection<Port> ports = new HashSet<Port>();
 				components.stream().map(it -> StatechartModelDerivedFeatures.getDerivedType(it))
@@ -242,12 +260,10 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 			}
 			if (reference == CompositeModelPackage.Literals.COMPONENT_INSTANCE_REFERENCE_EXPRESSION__COMPONENT_INSTANCE) {
 				// Execution list
-				if (context instanceof CascadeCompositeComponent) {
-					CascadeCompositeComponent cascade = (CascadeCompositeComponent) context;
+				if (context instanceof CascadeCompositeComponent cascade) {
 					return Scopes.scopeFor(cascade.getComponents());
 				}
-				if (context instanceof ScheduledAsynchronousCompositeComponent) {
-					ScheduledAsynchronousCompositeComponent scheduled = (ScheduledAsynchronousCompositeComponent) context;
+				if (context instanceof ScheduledAsynchronousCompositeComponent scheduled) {
 					return Scopes.scopeFor(scheduled.getComponents());
 				}
 			}
@@ -267,14 +283,15 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 					(reference == StatechartModelPackage.Literals.PORT_EVENT_REFERENCE__PORT ||
 					reference == StatechartModelPackage.Literals.ANY_PORT_EVENT_REFERENCE__PORT)) {
 				AsynchronousAdapter wrapper = ecoreUtil.getContainerOfType(context, AsynchronousAdapter.class);
-				return Scopes.scopeFor(StatechartModelDerivedFeatures.getAllPorts(wrapper));
+				return Scopes.scopeFor(
+						StatechartModelDerivedFeatures.getAllPorts(wrapper));
 			}
 			if ((context instanceof MessageQueue || context instanceof ControlSpecification) &&
 					reference == StatechartModelPackage.Literals.PORT_EVENT_REFERENCE__EVENT) {
 				AsynchronousAdapter wrapper = ecoreUtil.getContainerOfType(context, AsynchronousAdapter.class);
 				Collection<Event> events = new HashSet<Event>();
 				StatechartModelDerivedFeatures.getAllPorts(wrapper).stream()
-					.forEach(it -> events.addAll(StatechartModelDerivedFeatures.getInputEvents(it)));
+						.forEach(it -> events.addAll(StatechartModelDerivedFeatures.getInputEvents(it)));
 				return Scopes.scopeFor(events);
 			}
 			if (reference == ExpressionModelPackage.Literals.DIRECT_REFERENCE_EXPRESSION__DECLARATION) {
@@ -289,8 +306,7 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				ParametricElement element = ecoreUtil.getSelfOrContainerOfType(context, ParametricElement.class);
 				if (element != null) {
 					IScope parentScope = super.getScope(context, reference); // Parameters and constants
-					if (element instanceof StatechartDefinition) {
-						StatechartDefinition statechart = (StatechartDefinition) element;
+					if (element instanceof StatechartDefinition statechart) {
 						Collection<Declaration> declarations = new ArrayList<Declaration>();
 						declarations.addAll(statechart.getVariableDeclarations());
 						declarations.addAll(statechart.getFunctionDeclarations());
@@ -327,12 +343,113 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 	
 	@Override
 	protected List<FieldDeclaration> getFieldDeclarations(Expression operand) {
-		if (operand instanceof EventParameterReferenceExpression) {
-			EventParameterReferenceExpression reference = (EventParameterReferenceExpression) operand;
+		if (operand instanceof EventParameterReferenceExpression reference) {
 			Declaration declaration = reference.getParameter();
 			return super.getFieldDeclarations(declaration);
 		}
 		return super.getFieldDeclarations(operand);
 	}
 
+	//
+	
+	protected IScope handleTypeDeclarationAndComponentInstanceElementReferences(EObject context,
+			EReference reference, Collection<? extends Package> packages, Component component) {
+		IScope typeScope = handleTypeDeclarationReferences(context, reference, packages);
+		if (typeScope != null) {
+			return typeScope;
+		}
+		IScope componentInstanceElementScope = handleComponentInstanceElementReferences(context, reference, component);
+		if (componentInstanceElementScope != null) {
+			return componentInstanceElementScope;
+		}
+		
+		return null;
+	}
+
+	protected IScope handleTypeDeclarationReferences(EObject context, EReference reference,
+			Collection<? extends Package> packages) {
+		boolean _equals = Objects.equal(reference, ExpressionModelPackage.Literals.TYPE_REFERENCE__REFERENCE);
+		if (_equals) {
+			Function1<Package, List<TypeDeclaration>> _function = (Package it) -> {	return it.getTypeDeclarations(); };
+			Iterable<TypeDeclaration> typeDeclarations = Iterables.<TypeDeclaration>concat(IterableExtensions.map(packages, _function));
+			return Scopes.scopeFor(typeDeclarations);
+		}
+		
+		return null;
+	}
+
+	protected IScope handleComponentInstanceElementReferences(EObject context, EReference reference, Component component) {
+		boolean _equals = Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_REFERENCE_EXPRESSION__COMPONENT_INSTANCE);
+		if (_equals) {
+			ComponentInstanceReferenceExpression instanceContainer = this.ecoreUtil
+					.getSelfOrContainerOfType(context, ComponentInstanceReferenceExpression.class);
+			ComponentInstanceReferenceExpression _parent = null;
+			if (instanceContainer != null) {
+				_parent = StatechartModelDerivedFeatures.getParent(instanceContainer);
+			}
+			ComponentInstanceReferenceExpression parent = _parent;
+			List<ComponentInstance> instances = null;
+			if (parent == null) {
+				instances = StatechartModelDerivedFeatures.getAllInstances(component);
+			}
+			else {
+				instances = StatechartModelDerivedFeatures.getInstances(parent.getComponentInstance());
+			}
+			
+			return Scopes.scopeFor(instances);
+		}
+		if (context instanceof ComponentInstanceElementReferenceExpression) {
+			ComponentInstance instance = StatechartModelDerivedFeatures.getLastInstance(((ComponentInstanceElementReferenceExpression) context).getInstance());
+			Component statechart = StatechartModelDerivedFeatures.getDerivedType(instance);
+			if (statechart != null) {
+				if (statechart instanceof StatechartDefinition) {
+					boolean _equals_1 = Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_STATE_REFERENCE_EXPRESSION__REGION);
+					if (_equals_1) {
+						return Scopes.scopeFor(StatechartModelDerivedFeatures.getAllRegions((CompositeElement) statechart));
+					}
+					boolean _equals_2 = Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_STATE_REFERENCE_EXPRESSION__STATE);
+					if (_equals_2) {
+						ComponentInstanceStateReferenceExpression stateConfigurationReference = (ComponentInstanceStateReferenceExpression) context;
+						Region region = stateConfigurationReference.getRegion();
+						return Scopes.scopeFor(StatechartModelDerivedFeatures.getStates(region));
+					}
+					boolean _equals_3 = Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_VARIABLE_REFERENCE_EXPRESSION__VARIABLE_DECLARATION);
+					if (_equals_3) {
+						return Scopes.scopeFor(((StatechartDefinition) statechart).getVariableDeclarations());
+					}
+					if (Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_EVENT_REFERENCE_EXPRESSION__PORT) || 
+						Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_EVENT_PARAMETER_REFERENCE_EXPRESSION__PORT)) {
+						return Scopes.scopeFor(((StatechartDefinition) statechart).getPorts());
+					}
+					if (Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_EVENT_REFERENCE_EXPRESSION__EVENT) || 
+						Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_EVENT_PARAMETER_REFERENCE_EXPRESSION__EVENT)) {
+						if (context instanceof ComponentInstanceEventReferenceExpression) {
+							Port port = ((ComponentInstanceEventReferenceExpression) context).getPort();
+							boolean _eIsProxy = port.eIsProxy();
+							boolean _not = (!_eIsProxy);
+							if (_not) {
+								return Scopes.scopeFor(StatechartModelDerivedFeatures.getAllEvents(port));
+							}
+						}
+						if (context instanceof ComponentInstanceEventParameterReferenceExpression) {
+							Port port_1 = ((ComponentInstanceEventParameterReferenceExpression) context).getPort();
+							boolean _eIsProxy_1 = port_1.eIsProxy();
+							boolean _not_1 = !_eIsProxy_1;
+							if (_not_1) {
+								return Scopes.scopeFor(StatechartModelDerivedFeatures.getOutputEvents(port_1));
+							}
+						}
+					}
+					boolean _equals_4 = Objects.equal(reference, CompositeModelPackage.Literals.COMPONENT_INSTANCE_EVENT_PARAMETER_REFERENCE_EXPRESSION__PARAMETER_DECLARATION);
+					if (_equals_4) {
+						ComponentInstanceEventParameterReferenceExpression eventParameterReference = (ComponentInstanceEventParameterReferenceExpression) context;
+						return Scopes.scopeFor(eventParameterReference.getEvent().getParameterDeclarations());
+					}
+				}
+			}
+		}
+		
+		return null;
+	}
+	
 }

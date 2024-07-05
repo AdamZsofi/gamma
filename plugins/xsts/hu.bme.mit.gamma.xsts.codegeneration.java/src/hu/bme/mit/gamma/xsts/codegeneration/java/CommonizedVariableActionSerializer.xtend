@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -20,6 +20,7 @@ import hu.bme.mit.gamma.xsts.model.EmptyAction
 import hu.bme.mit.gamma.xsts.model.IfAction
 import hu.bme.mit.gamma.xsts.model.LoopAction
 import hu.bme.mit.gamma.xsts.model.NonDeterministicAction
+import hu.bme.mit.gamma.xsts.model.ParallelAction
 import hu.bme.mit.gamma.xsts.model.SequentialAction
 import hu.bme.mit.gamma.xsts.model.VariableDeclarationAction
 import hu.bme.mit.gamma.xsts.model.XSTS
@@ -35,6 +36,18 @@ class CommonizedVariableActionSerializer extends ActionSerializer {
 	
 	override serializeInitializingAction(XSTS xSts) '''
 		«xSts.initializingAction.serialize»
+	'''
+	
+	override serializeVariableReset(XSTS xSts) '''
+		«xSts.variableInitializingTransition.action.serialize»
+	'''
+	
+	override serializeStateConfigurationReset(XSTS xSts) '''
+		«xSts.configurationInitializingTransition.action.serialize»
+	'''
+	
+	override serializeEntryEventRaise(XSTS xSts) '''
+		«xSts.entryEventTransition.action.serialize»
 	'''
 	
 	// Note that only the first transition is serialized
@@ -55,7 +68,7 @@ class CommonizedVariableActionSerializer extends ActionSerializer {
 		val left = action.range.getLeft(true)
 		val right = action.range.getRight(false)
 		return '''
-			for (int «name» = «left.serialize»; «name» < «right.serialize»; ++i) {
+			for (int «name» = «left.serialize»; «name» < «right.serialize»; ++«name») {
 				«action.action.serialize»
 			}
 		'''
@@ -84,6 +97,11 @@ class CommonizedVariableActionSerializer extends ActionSerializer {
 	'''
 	
 	def dispatch CharSequence serialize(SequentialAction action) '''
+		«FOR xStsSubaction : action.actions»«xStsSubaction.serialize»«ENDFOR»
+	'''
+	
+	// Same as sequential
+	def dispatch CharSequence serialize(ParallelAction action) '''
 		«FOR xStsSubaction : action.actions»«xStsSubaction.serialize»«ENDFOR»
 	'''
 	

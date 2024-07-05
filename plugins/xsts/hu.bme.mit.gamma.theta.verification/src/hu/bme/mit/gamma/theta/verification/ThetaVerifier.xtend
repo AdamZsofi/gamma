@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -16,27 +16,28 @@ import hu.bme.mit.gamma.verification.result.ThreeStateBoolean
 import hu.bme.mit.gamma.verification.util.AbstractVerifier
 import java.io.File
 import java.util.Scanner
-import java.util.logging.Level
 
 import static com.google.common.base.Preconditions.checkState
 
 class ThetaVerifier extends AbstractVerifier {
-	
+	//
 	protected final extension ThetaQueryAdapter thetaQueryAdapter = ThetaQueryAdapter.INSTANCE
 	protected final extension ThetaValidator thetaValidator = ThetaValidator.INSTANCE
 	
 	final String ENVIRONMENT_VARIABLE_FOR_THETA_JAR = "THETA_XSTS_CLI_PATH"
+	final String PROP_KEYWORD = "prop"
 	
 	final String SAFE = "SafetyResult Safe"
 	final String UNSAFE = "SafetyResult Unsafe"
+	//
 	
-	override Result verifyQuery(Object traceability, String parameters, File modelFile, String query) {
+	override Result verifyQuery(Object traceability, String parameters, File modelFile, String queries) {
 		var Result result = null
-		for (singleQuery : query.split(System.lineSeparator).reject[it.nullOrEmpty]) {
+		for (singleQuery : queries.splitLines) {
 			// Supporting multiple queries in separate files
 			val parsedQuery = singleQuery.adaptQuery
 			val wrappedQuery = '''
-				prop {
+				«PROP_KEYWORD» {
 					«parsedQuery»
 				}
 			'''
@@ -51,10 +52,19 @@ class ThetaVerifier extends AbstractVerifier {
 				result = new Result(ThreeStateBoolean.UNDEF, oldTrace)
 			}
 		}
+		
 		return result
 	}
 	
 	override Result verifyQuery(Object traceability, String parameters, File modelFile, File queryFile) {
+		// Checking if the query file contains more queries
+		val queries = fileUtil.loadString(queryFile).trim
+		if (!queries.startsWith(PROP_KEYWORD)) {
+			// Processing of queries and indirect recursion
+			return traceability.verifyQuery(parameters, modelFile, queries)
+		}
+		//
+		
 		var Scanner resultReader = null
 		var Scanner traceFileScanner = null
 		try {
@@ -66,7 +76,7 @@ class ThetaVerifier extends AbstractVerifier {
 			traceFile.delete // So no invalid/old cex is parsed if this actual process does not generate one
 			traceFile.deleteOnExit // So the cex with this random name does not remain on disk
 			
-			val splitParameters = parameters.split(" ")
+			val splitParameters = parameters.split("\\s+")
 			val command = newArrayList
 			command += #["java", "-jar", jar]
 			if (!parameters.nullOrEmpty && !splitParameters.empty) {
@@ -77,7 +87,7 @@ class ThetaVerifier extends AbstractVerifier {
 				#["--model", modelFile.canonicalPath, "--property", queryFile.canonicalPath,
 					"--cex", traceFile.canonicalPath, "--stacktrace"]
 			// Executing the command
-			logger.log(Level.INFO, "Executing command: " + command.join(" "))
+			logger.info("Executing command: " + command.join(" "))
 			process = Runtime.getRuntime().exec(command)
 			
 			val outputStream = process.inputStream
@@ -86,7 +96,7 @@ class ThetaVerifier extends AbstractVerifier {
 			while (resultReader.hasNext) {
 				// (SafetyResult Safe) or (SafetyResult Unsafe)
 				line = resultReader.nextLine
-				logger.log(Level.INFO, line)
+				logger.info(line)
 			}
 			// Variable 'line' contains the last line of the output - the result
 			if (line.contains(SAFE)) {
@@ -96,8 +106,14 @@ class ThetaVerifier extends AbstractVerifier {
 				super.result = ThreeStateBoolean.FALSE
 			}
 			else {
-				// Some kind of error
-				throw new IllegalArgumentException(line)
+				// Some kind of error or interruption (cancel) by another (winner) process
+				logger.warning(line)
+				if (isCancelled || Thread.currentThread.interrupted) {
+					return new Result(ThreeStateBoolean.UNDEF, null)
+				}
+				else {
+					throw new IllegalArgumentException(line)
+				}
 			}
 			// Adapting result
 			super.result = super.result.adaptResult
@@ -105,26 +121,23 @@ class ThetaVerifier extends AbstractVerifier {
 				// No proof/counterexample
 				return new Result(result, null)
 			}
+			
 			val gammaPackage = traceability as Package
 			traceFileScanner = new Scanner(traceFile)
 			val trace = gammaPackage.backAnnotate(traceFileScanner)
+			
 			return new Result(result, trace)
 		} finally {
-			if (resultReader !== null) {
-				resultReader.close
-			}
-			if (traceFileScanner !== null) {
-				traceFileScanner.close
-			}
+			resultReader?.close
+			traceFileScanner?.close
+			cancel
 		}
 	}
 	
 	protected def backAnnotate(Package gammaPackage, Scanner traceFileScanner) {
+		val backAnnotator = new TraceBackAnnotator(gammaPackage, traceFileScanner)
 		// Must be synchronized due to the non-thread-safe VIATRA engine
-		synchronized (TraceBackAnnotator.getEngineSynchronizationObject) {
-			val backAnnotator = new TraceBackAnnotator(gammaPackage, traceFileScanner)
-			return backAnnotator.execute
-		}
+		return backAnnotator.synchronizeAndExecute
 	}
 	
 	override getTemporaryQueryFilename(File modelFile) {

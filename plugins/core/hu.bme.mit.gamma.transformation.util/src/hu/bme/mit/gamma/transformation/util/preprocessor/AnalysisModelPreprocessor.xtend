@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -25,7 +25,6 @@ import hu.bme.mit.gamma.util.FileUtil
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.io.File
 import java.util.List
-import java.util.logging.Level
 import java.util.logging.Logger
 import org.eclipse.emf.common.util.URI
 
@@ -50,7 +49,7 @@ class AnalysisModelPreprocessor {
 		return gammaPackage.preprocess(#[], targetFolderUri, fileName, optimize)
 	}
 	
-	def preprocess(Package gammaPackage, List<Expression> topComponentArguments,
+	def preprocess(Package gammaPackage, List<? extends Expression> topComponentArguments,
 			String targetFolderUri, String fileName, boolean optimize) {
 		val fileNameExtensionless = fileName.extensionlessName
 		
@@ -64,7 +63,7 @@ class AnalysisModelPreprocessor {
 		val name = component.name
 		// If it is an atomic component, we wrap it
 		if (component instanceof SynchronousStatechartDefinition) {
-			logger.log(Level.INFO, "Wrapping synchronous statechart " + name)
+			logger.info("Wrapping synchronous statechart " + name)
 			val wrapper = component.wrapSynchronousComponent
 			wrapper.addWrapperComponentAnnotation // Adding wrapper annotation
 			_package.components.add(0, wrapper)
@@ -72,14 +71,15 @@ class AnalysisModelPreprocessor {
 		else if (component instanceof AsynchronousAdapter) {
 			if (!component.simplifiable) {
 				// Queues have to be introduced 
-				logger.log(Level.INFO, "Wrapping adapter " + name)
+				logger.info("Wrapping adapter " + name)
 				val wrapper = component.wrapAsynchronousComponent
 				wrapper.addWrapperComponentAnnotation // Adding wrapper annotation
 				_package.components.add(0, wrapper)
-				modelUnfolder.renameInstances(wrapper) // Renaming manually due to Scheduled-Adapter extension
+				 // Renaming manually due to Scheduled-Adapter extension
+				modelUnfolder.renameInstancesAccordingToWrapping(wrapper, component)
 			}
 			else {
-				logger.log(Level.INFO, "Adapter " + name + " does not have to be wrapped")
+				logger.info("Adapter " + name + " does not have to be wrapped")
 			}
 		}
 		
@@ -108,20 +108,20 @@ class AnalysisModelPreprocessor {
 		return _package.components.head
 	}
 	
-	protected def transformTopComponentParameters(Component component, List<Expression> arguments) {
+	protected def transformTopComponentParameters(Component component, List<? extends Expression> arguments) {
 		if (arguments.nullOrEmpty) {
 			return
 		}
 		val _package = component.containingPackage
 		val parameters = component.parameterDeclarations
-		logger.log(Level.INFO, "Argument size: " + arguments.size + " - parameter size: " + parameters.size)
+		logger.info("Argument size: " + arguments.size + " - parameter size: " + parameters.size)
 		checkState(arguments.size <= parameters.size)
 		// For code generation, not all (actually zero) parameters have to be bound
 		_package.annotations += createTopComponentArgumentsAnnotation => [
 			it.arguments += arguments.map[it.clone]
 		]
 		
-		_package.constantDeclarations += parameters.extractParamaters(
+		_package.constantDeclarations += parameters.extractParameters(
 			parameters.map['''__«it.name»__'''], arguments)
 	}
 	

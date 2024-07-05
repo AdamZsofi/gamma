@@ -227,3 +227,70 @@
 * Optimizations (slicing based on the properties) have been introduced in the verification task.
 * Bugs related to clock and timing variables in the XSTS-UPPAAL transformation have been fixed.
 * Bugs related to transition handlings in the XSTS transformation have been fixed.
+
+## 2022.10.06. - Version 2.8.0
+
+### What is New
+
+* Gamma now depends on Java 17.
+* The trace language (GTL) now supports atomic statecharts, too.
+* The scenario language (GSCL) now supports new constructs, such as variables, variable assignments and check expressions.
+* Spin has been integrated as a verification back-end via a PROMELA transformation.
+
+### Improvements
+
+* Optimizations slicing based on the properties have been introduced in the verification task, which can be set with the `optimize-model` setting in a ggen model.
+* Optimizations with regard to trace replays have been introduced.
+* Optimizations with regard to one-capacity arrays have been introduced in the XSTS transformation.
+* Bugs related to orthogonal actions in the XSTS-UPPAAL transformation have been fixed.
+* Bugs related to region scheduling in the XSTS-UPPAAL transformation have been fixed.
+* Bugs related to command line arguments during verification have been fixed.
+
+## 2023.03.31. - Version 2.9.0
+
+### What is New
+
+* Gamma tasks now can be cancelled on the GUI.
+* The trace language (GTL) now supports variable declarations, too.
+* The composition language (GCL) now supports event redirection with regard to the target input port-event combination in message queues of asynchronous adapters, too.
+* The composition language (GCL) now supports message queue clearing control specifications of asynchronous adapters, too.
+* The statechart language (GSL) now supports the sequential, unordered and parallel execution of orthogonal regions.
+
+### Improvements
+
+* Model slicing algorithms for verification based on XSTS models has been improved.
+* Clock handling in XSTS-UPPAAL models has been improved.
+* The Promela mapping has been improved.
+* The model checking of asynchronous-reactive models has been improved.
+
+## 2023.12.11. - Version 2.10.0
+
+### What is New
+
+* Gamma now supports nuXmv as a model checker back-end.
+* Gamma now supports safety assessment via the integration with xSAP.
+* Gamma now has its own Eclipse perspective.
+* Gamma now supports message demultiplexing in the message queues of asynchronous adapters.
+
+### Improvements
+
+* Bugs related to system reset and time-dependent behavior have been fixed in the Java code generator.
+* Optimization regarding variable assignments and boolean expressions has been introduced in the XSTS mapping.
+* Optimization regarding semantic variation points in statecharts has been introduced in the statechart optimizer.
+
+## 2024.04.16. - Version 2.11.0
+
+### What is New
+
+* Gamma now supports an automated model-mutation based approach for test generation.
+* GSL and GCL support state and environment invariants.
+* Gamma now supports the automated checking of trace equivalence.
+* The Spin back-end now can be used in the context of a BMC approach.
+
+### Improvements
+
+* Bugs have been fixed related to handling internal event transmission as some events in statecharts contained by cascade composite components were not transmitted.
+* Bugs have been fixed related to initializing clock variables in asynchronous adapters as clock variables were not initialized to 0 in the initialization transition of XSTS.
+* Bugs related to optimizations in regard to removing unreachable states and subregions have been fixed.
+* Bugs been fixed related to the Theta back-annotator component of the framework as it contained faults that affected the parsing of "default" values in array literals.
+* Bugs been fixed related to the SSA conversion as it contained a fault in regard to assigning values to elements of array variables in different branches of an if-else statement.

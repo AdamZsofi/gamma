@@ -16,14 +16,14 @@ import hu.bme.mit.gamma.expression.model.DirectReferenceExpression
 import hu.bme.mit.gamma.expression.model.DivExpression
 import hu.bme.mit.gamma.expression.model.ElseExpression
 import hu.bme.mit.gamma.expression.model.EnumerationLiteralExpression
+import hu.bme.mit.gamma.expression.model.Expression
 import hu.bme.mit.gamma.expression.model.IfThenElseExpression
 import hu.bme.mit.gamma.expression.model.ModExpression
 import hu.bme.mit.gamma.expression.model.NotExpression
 import hu.bme.mit.gamma.expression.util.ExpressionTypeDeterminator2
-import hu.bme.mit.gamma.xsts.model.PrimedVariable
+import hu.bme.mit.gamma.statechart.statechart.TimeoutReferenceExpression
 
 import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
-import static extension hu.bme.mit.gamma.xsts.derivedfeatures.XstsDerivedFeatures.*
 
 class ExpressionSerializer extends hu.bme.mit.gamma.expression.util.ExpressionSerializer {
 	// Singleton
@@ -53,10 +53,21 @@ class ExpressionSerializer extends hu.bme.mit.gamma.expression.util.ExpressionSe
 	
 	override String _serialize(DirectReferenceExpression expression) {
 		val declaration = expression.declaration
-		if (declaration instanceof PrimedVariable) {
-			return '''next(«declaration.originalVariable.name»)'''
-		}
+//		if (declaration instanceof PrimedVariable) {
+//			return '''next(«declaration.originalVariable.name»)'''
+//		}
+		
 		return '''«declaration.name»'''
+	}
+	
+	def String serialize(TimeoutReferenceExpression expression) '''«expression.timeout.name»'''
+	
+	override String serialize(Expression expression) {
+		if (expression instanceof TimeoutReferenceExpression) {
+			return expression.serialize
+		} else {
+			return super.serialize(expression)
+		}
 	}
 	
 }

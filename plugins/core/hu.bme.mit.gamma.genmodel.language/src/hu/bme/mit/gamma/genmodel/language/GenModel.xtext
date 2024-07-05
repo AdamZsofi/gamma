@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,7 +10,6 @@
  ********************************************************************************/
 grammar hu.bme.mit.gamma.genmodel.language.GenModel with hu.bme.mit.gamma.expression.language.ExpressionLanguage
 
-//import "http://www.eclipse.org/emf/2002/Ecore" as ecore
 import "http://www.mit.bme.hu/gamma/statechart/Model/Statechart" as statechart
 import "http://www.mit.bme.hu/gamma/statechart/Model/Interface" as interface
 import "http://www.mit.bme.hu/gamma/statechart/Model/Composite" as composite
@@ -20,6 +19,7 @@ import "http://www.mit.bme.hu/gamma/property/Model" as property
 import "http://www.mit.bme.hu/gamma/expression/Model" as expression
 import "http://www.mit.bme.hu/gamma/xSTS/Model" as xsts
 import "http://www.mit.bme.hu/gamma/scenario/Model" as scenario
+import "http://www.mit.bme.hu/gamma/fei/Model" as fei
 
 import "http://www.yakindu.org/sct/sgraph/2.0.0" as sgraph
 import "http://www.yakindu.org/sct/statechart/SText" as stext
@@ -41,7 +41,8 @@ Task returns Task:
 		EventPriorityTransformation | AdaptiveContractTestGeneration |
 		AdaptiveBehaviorConformanceChecking | PhaseStatechartGeneration |
 		Verification | TraceReplayModelGeneration | Slicing | StatechartContractTestGeneration |
-		StatechartContractGeneration
+		StatechartContractGeneration | TraceGeneration  | FaultTreeGeneration | FmeaTableGeneration |
+		ModelMutation | MutationBasedTestGeneration
 ;
 
 YakinduCompilation returns YakinduCompilation:
@@ -79,6 +80,7 @@ CodeGeneration returns CodeGeneration:
 		'component' ':' component=[interface::Component]
 		(
 			'folder' ':' targetFolder+=STRING |
+			'project' ':' projectName+=STRING |
 			'base-package' ':' packageName+=STRING | // Java base package
 			'language' ':' programmingLanguages+=ProgrammingLanguage
 		)*
@@ -90,6 +92,7 @@ TestGeneration returns TestGeneration:
 		'trace' ':' executionTrace=[trace::ExecutionTrace]
 		(
 			'folder' ':' targetFolder+=STRING |
+			'project' ':' projectName+=STRING |
 			'file' ':' fileName+=STRING | // The name of the generated file
 			'base-package' ':' packageName+=STRING | // Java base package
 			'language' ':' programmingLanguages+=ProgrammingLanguage
@@ -108,11 +111,11 @@ EventPriorityTransformation returns EventPriorityTransformation:
 ;
 
 enum ProgrammingLanguage returns ProgrammingLanguage:
-	JAVA = 'java'
+	JAVA = 'java' | C = 'C'
 ;
 
 AnalysisModelTransformation returns AnalysisModelTransformation:
-	'analysis' '{'
+	('analysis' | 'analysis-model' ) '{'
 		model=ModelReference
 		(
 			'task' ':' task=AnalysisTask |
@@ -123,6 +126,7 @@ AnalysisModelTransformation returns AnalysisModelTransformation:
 			'initial-state' ':' initialState=[property::PropertyPackage | STRING] |
 			'initial-state-setting' ':' initialStateSetting=InitialStateSetting |
 			'optimize' ':' optimize=BOOLEAN |
+			'optimize-environmental-message-queues' ':' optimizeEnvironmentalMessageQueues=BOOLEAN |
 			'scheduler' ':' scheduler+=Scheduler |
 			'constraint' ':' constraint=Constraint |
 			coverages+=Coverage
@@ -139,14 +143,18 @@ enum InitialStateSetting returns InitialStateSetting:
 ;
 
 ModelReference returns ModelReference:
-	ComponentReference | XSTSReference
+	ComponentReference | XstsReference
 ;
 
 ComponentReference returns ComponentReference:
-	'component' ':' component=[interface::Component] ('(' arguments+=Expression (',' arguments+=Expression)* ')')? 
+	'component' ':' PlainComponentReference
 ;
 
-XSTSReference returns XstsReference:
+PlainComponentReference returns ComponentReference:
+	component=[interface::Component] ('(' arguments+=Expression (',' arguments+=Expression)* ')')?
+;
+
+XstsReference returns XstsReference:
 	'xsts' ':' xSts=[xsts::XSTS | STRING]
 ;
 
@@ -205,7 +213,8 @@ enum Scheduler returns Scheduler:
 ;
 
 enum AnalysisLanguage returns AnalysisLanguage:
-	UPPAAL = "UPPAAL" | THETA = "Theta" | XSTS_UPPAAL = "XSTS-UPPAAL"
+	UPPAAL = "UPPAAL" | THETA = "Theta" | THETA = "XSTS" | XSTS_UPPAAL = "XSTS-UPPAAL" |
+		PROMELA = "Promela" | PROMELA = "Spin" | NUXMV = "SMV" | NUXMV = "nuXmv" | OCRA = "OCRA"
 ;
 
 Coverage returns Coverage:
@@ -291,7 +300,8 @@ Verification returns Verification:
 		(
 			'trace-folder' ':' targetFolder+=STRING | // Trace folder
 			'file' ':' fileName+=STRING | // Trace model
-			'optimize-model' ':' ('false' | optimizeModel?='true') |
+			'project' ':' projectName+=STRING |
+			'optimize-model' ':' ('false' | (optimizeModel?='true' ('optimize-out-events' ':' ('false' | optimizeOutEvents?='true'))?)) |
 			'svg-file' ':' svgFileName+=STRING |
 			'language' ':' analysisLanguages+=AnalysisLanguage |
 			'query-file' ':' queryFiles+=STRING | // Queries
@@ -299,22 +309,42 @@ Verification returns Verification:
 			'property-file' ':' propertyPackages+=[property::PropertyPackage | STRING] | // Property models
 			'base-package' ':' packageName+=STRING  | // Java base package
 			'test-language' ':' programmingLanguages+=ProgrammingLanguage |
-			'optimize' ':' ('false' | optimize?='true') |
+			('optimize' | ('optimize-traces')) ':' ('false' | optimize?='true') |
 			'back-annotate-to-original' ':' ('false' | backAnnotateToOriginal?='true') |
-			'test-folder' ':' testFolder+=STRING
+			'test-folder' ':' testFolder+=STRING |
+			'timeout' ':' timeout=TimeSpecification
+		)*
+	'}'
+;
+
+TraceGeneration returns TraceGeneration: // Generate all traces with Theta
+	{TraceGeneration} 'trace-generation' '{'
+		(
+			'file' ':' fileName+=STRING |
+			variableLists+='variables' ':'	'{'
+				(
+					variables+=STRING
+				)*
+			'}'	|
+			'fullTraces' ':' fullTraces=BOOLEAN |
+			'noTransitionCoverage' ':' noTransitionCoverage=BOOLEAN
 		)*
 	'}'
 ;
 
 TraceReplayModelGeneration returns TraceReplayModelGeneration:
 	{TraceReplayModelGeneration} 'trace-replay' '{'
-		'trace' ':' executionTrace=[trace::ExecutionTrace]
+		(
+			'trace' ':' executionTrace=[trace::ExecutionTrace] |
+			('trace-folder' ':' executionTraceFolder+=STRING)+
+		) // For multiple traces
 		(
 			'system-file' ':' fileName+=STRING | // The name of the file containing the system
 			'folder' ':' targetFolder+=STRING | 
 			'environment-model-file' ':' environmentModelFileName+=STRING |
 			'environment-model' ':' environmentModel=EnvironmentModel |
-			'consider-out-events' ':' considerOutEvents=BOOLEAN
+			'consider-out-events' ':' considerOutEvents=BOOLEAN |
+			'language' ':' analysisLanguages+=AnalysisLanguage
 		)*
 	'}'
 ;
@@ -352,6 +382,7 @@ AdaptiveContractTestGeneration returns AdaptiveContractTestGeneration:
 		modelTransformation=AnalysisModelTransformation
 		(
 		'folder' ':' targetFolder+=STRING |
+		'project' ':' projectName+=STRING |
 		'file' ':' fileName+=STRING | // The name of the generated file
 		'base-package' ':' packageName+=STRING | // Java base package
 		'language' ':' programmingLanguages+=ProgrammingLanguage |
@@ -361,11 +392,11 @@ AdaptiveContractTestGeneration returns AdaptiveContractTestGeneration:
 ;
 
 AdaptiveBehaviorConformanceChecking returns AdaptiveBehaviorConformanceChecking:
-	{AdaptiveBehaviorConformanceChecking} 'adaptive-conformance-check' '{'
+	{AdaptiveBehaviorConformanceChecking}
+	'adaptive-conformance-check' '{'
 		modelTransformation=AnalysisModelTransformation
-		(
+		('environment' ':' environmentModel=PlainComponentReference)?
 		'folder' ':' targetFolder+=STRING
-		)*
 	'}'
 ;
 
@@ -385,6 +416,7 @@ StatechartContractGeneration returns StatechartContractGeneration:
 	 ('folder' ':' targetFolder+=STRING)?
 	 ('name' ':' fileName+=STRING)?
 	 ('restart-on-cold-violation' ':' StartAsColdViolation=BOOLEAN)?
+	 ('restart-on-accept' ':' RestartOnAccept=BOOLEAN)?
 	 ('loop-for-interaction' ':' UseIteratingVariable=BOOLEAN)?
 	 ('automaton-type' ':' AutomatonType=ContractAutomatonType)?
 	 ('test-type' ':' TestType=TestAutomatonType)?
@@ -403,6 +435,70 @@ PhaseStatechartGeneration returns PhaseStatechartGeneration:
 		(
 		'folder' ':' targetFolder+=STRING |
 		'file' ':' fileName+=STRING // The name of the generated file
+		)*
+	'}'
+;
+
+// Safety assessment
+
+FaultTreeGeneration returns FaultTreeGeneration:
+	{FaultTreeGeneration} 'fault-tree-generation' '{'
+		(analysisModelTransformation=AnalysisModelTransformation)?
+		(
+			'folder' ':' targetFolder+=STRING |
+			'file-name' ':' fileName+=STRING |
+			'fault-extension-instructions-file' ':' faultExtensionInstructionsFile+=STRING |
+			'fault-extension-instructions' ':' faultExtensionInstructions=[fei::FaultExtensionInstructions | STRING] |
+			'fault-modes-file' ':' faultModesFile+=STRING | // Manually created XML (e.g., for debugging)
+			'top-level-event' ':' propertyPackages+=[property::PropertyPackage | STRING] // Property models
+		)*
+	'}'
+;
+
+FmeaTableGeneration returns FmeaTableGeneration:
+	{FmeaTableGeneration} 'fmea-table-generation' '{'
+		(analysisModelTransformation=AnalysisModelTransformation)?
+		(
+			'folder' ':' targetFolder+=STRING |
+			'file-name' ':' fileName+=STRING |
+			'fault-extension-instructions-file' ':' faultExtensionInstructionsFile+=STRING |
+			'fault-extension-instructions' ':' faultExtensionInstructions=[fei::FaultExtensionInstructions | STRING] |
+			'fault-modes-file' ':' faultModesFile+=STRING | // Manually created XML (e.g., for debugging)
+			'top-level-event' ':' propertyPackages+=[property::PropertyPackage | STRING] | // Property models
+			// FMEA-related
+			'cardinality' ':' cardinality=Expression |
+			'bmc-bound' ':' bmcBound=Expression |
+			'visualize' ':' visualize=BOOLEAN
+		)*
+	'}'
+;
+
+ModelMutation returns ModelMutation:
+	'model-mutation' '{'
+		model=ModelReference
+		(
+			'folder' ':' targetFolder+=STRING |
+			'file' ':' fileName+=STRING |
+			'mutation-count' ':' iterationCount=Expression |
+			'pattern-class-name' ':' patternClassNames+=STRING
+		)*
+	'}'
+;
+
+MutationBasedTestGeneration returns MutationBasedTestGeneration:
+	'mutation-based-test-generation' '{'
+		analysisModelTransformation=AnalysisModelTransformation
+		(
+			'project' ':' projectName+=STRING |
+			'folder' ':' targetFolder+=STRING |
+			'file' ':' fileName+=STRING |
+			'mutation-count' ':' iterationCount=Expression |
+			'base-package' ':' packageName+=STRING | // Java base package
+			'language' ':' programmingLanguages+=ProgrammingLanguage |
+			'test-folder' ':' testFolder+=STRING |
+			'trace-folder' ':' traceFolders+=STRING |
+			'test-class-name-pattern' ':' testClassNamePattern=STRING |
+			'pattern-class-name' ':' patternClassNames+=STRING
 		)*
 	'}'
 ;

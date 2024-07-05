@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2021 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,10 +10,12 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.trace.environment.transformation
 
+import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.statechart.interface_.Port
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.StatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.StatechartModelFactory
+import hu.bme.mit.gamma.statechart.statechart.TransitionPriority
 import hu.bme.mit.gamma.statechart.util.StatechartUtil
 import hu.bme.mit.gamma.trace.model.ExecutionTrace
 import hu.bme.mit.gamma.trace.model.Reset
@@ -30,7 +32,7 @@ class TraceToEnvironmentModelTransformer {
 	protected final extension Namings namings
 	
 	protected final String environmentModelName
-	protected final boolean considerOutEvents
+	protected final boolean handleOutEventPassing
 	protected final ExecutionTrace executionTrace
 	protected final EnvironmentModel environmentModel
 	protected final Trace trace
@@ -43,13 +45,14 @@ class TraceToEnvironmentModelTransformer {
 	protected extension StatechartUtil statechartUtil = StatechartUtil.INSTANCE
 	protected extension GammaEcoreUtil gammaEcoreUtil = GammaEcoreUtil.INSTANCE
 	
-	protected extension StatechartModelFactory statechartModelFactory = StatechartModelFactory.eINSTANCE
+	protected extension StatechartModelFactory statechartFactory = StatechartModelFactory.eINSTANCE
+	protected extension ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE
 	protected extension TraceModelFactory traceFactory = TraceModelFactory.eINSTANCE
 	
-	new(String environmentModelName, boolean considerOutEvents,
+	new(String environmentModelName, boolean handleOutEventPassing,
 			ExecutionTrace executionTrace, EnvironmentModel environmentModel) {
 		this.environmentModelName = environmentModelName
-		this.considerOutEvents = considerOutEvents
+		this.handleOutEventPassing = handleOutEventPassing
 		this.executionTrace = executionTrace
 		this.isComponentSynchronous = executionTrace.component.synchronous
 		this.environmentModel = environmentModel
@@ -57,15 +60,18 @@ class TraceToEnvironmentModelTransformer {
 		this.trace = new Trace
 		this.triggerTransformer = new TriggerTransformer(this.trace, this.namings)
 		this.originalEnvironmentBehaviorCreator = new OriginalEnvironmentBehaviorCreator(
-			this.trace, this.environmentModel, this.namings, this.considerOutEvents)
+				this.trace, this.environmentModel, this.namings, this.handleOutEventPassing)
 	}
 	
 	def execute() {
 		validate
 		
 		val statechart = (isComponentSynchronous) ?
-				createSynchronousStatechartDefinition : createAsynchronousStatechartDefinition
+				createSynchronousStatechartDefinition :
+				createAsynchronousStatechartDefinition => [it.capacity = 1.toIntegerLiteral] // Should be enough
+				
 		statechart.name = environmentModelName
+		statechart.transitionPriority = TransitionPriority.ORDER_BASED
 		
 		statechart.transformPorts(trace)
 		
@@ -83,6 +89,8 @@ class TraceToEnvironmentModelTransformer {
 		actualTransition.targetState.remove
 		actualTransition.remove
 		
+		statechart.addAsynchronousExecutionConstraints // Before the original environment creator part!
+		
 		lastState.createOriginalEnvironmentBehavior
 		
 		return new Result(statechart, lastState)
@@ -96,7 +104,8 @@ class TraceToEnvironmentModelTransformer {
 	
 	protected def transformPorts(StatechartDefinition environmentModel, Trace trace) {
 		val component = executionTrace.component
-		for (componentPort : component.ports) {
+		var hasAsnycInputEvent = false
+		for (componentPort : component.allPorts) {
 			// Environment ports: connected to the original ports
 			val environmentPort = componentPort.clone
 			val interfaceRealization = environmentPort.interfaceRealization
@@ -108,7 +117,8 @@ class TraceToEnvironmentModelTransformer {
 			trace.putComponentEnvironmentPort(componentPort, environmentPort)
 			
 			// Proxy ports: led out to the system
-			if (this.environmentModel !== EnvironmentModel.OFF) { 
+			if (this.environmentModel !== EnvironmentModel.OFF || // To allow for triggering the execution of async environment statechart
+				(environmentModel.asynchronous && !hasAsnycInputEvent && componentPort.hasInputEvents)) {
 				val proxyPort = componentPort.clone
 				
 				proxyPort.name = componentPort.proxyPortName
@@ -116,7 +126,30 @@ class TraceToEnvironmentModelTransformer {
 				environmentModel.ports += proxyPort
 				trace.putComponentProxyPort(componentPort, proxyPort)
 				trace.putProxyEnvironmentPort(proxyPort, environmentPort)
+				//
+				if (componentPort.hasInputEvents) {
+					hasAsnycInputEvent = true
+				}
+				//
 			}
+		}
+	}
+	
+	protected def addAsynchronousExecutionConstraints(StatechartDefinition statechart) {
+		if (isComponentSynchronous) {
+			return
+		}
+		
+		val executionEnforcerVariable = createBooleanTypeDefinition
+				.createVariableDeclaration("executionEnforcer", createTrueExpression)
+		statechart.variableDeclarations += executionEnforcerVariable
+		executionEnforcerVariable.addResettableAnnotation // So that a transition has to be fired in every cycle
+		
+		statechart.invariants += executionEnforcerVariable.createEqualityExpression(createTrueExpression)
+		
+		val transitions = statechart.transitions
+		for (transition : transitions) {
+			transition.effects += executionEnforcerVariable.createAssignment(createTrueExpression)
 		}
 	}
 	

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -83,12 +83,27 @@ class SynchronousCompositeComponentCodeGenerator {
 				init();
 			}
 			
+			//
 			/** Resets the contained statemachines recursively. Must be called to initialize the component. */
 			@Override
 			public void reset() {
-				«FOR instance : component.components»
-					«instance.name».reset();
-				«ENDFOR»
+				this.handleBeforeReset();
+				this.resetVariables();
+				this.resetStateConfigurations();
+				this.raiseEntryEvents();
+				this.handleAfterReset();
+			}
+			
+			public void handleBeforeReset() {
+				//
+				«component.executeHandleBeforeReset»
+			}
+			
+			«component.generateResetMethods»
+			
+			public void handleAfterReset() {
+				«component.executeHandleAfterReset»
+				//
 				«IF component instanceof CascadeCompositeComponent»
 					// Setting only a single queue for cascade statecharts
 					«FOR instance : component.components.filter[it.isStatechart]»
@@ -110,6 +125,7 @@ class SynchronousCompositeComponentCodeGenerator {
 				notifyListeners();
 				«IF component.hasInternalPort»handleInternalEvents();«ENDIF»
 			}
+			//
 			
 			/** Creates the channel mappings and enters the wrapped statemachines. */
 			private void init() {
@@ -126,7 +142,7 @@ class SynchronousCompositeComponentCodeGenerator {
 			}
 			
 			// Inner classes representing Ports
-			«FOR systemPort : component.ports SEPARATOR "\n"»
+			«FOR systemPort : component.ports SEPARATOR System.lineSeparator»
 				public class «systemPort.name.toFirstUpper» implements «systemPort.interfaceRealization.interface.implementationName».«systemPort.interfaceRealization.realizationMode.toString.toLowerCase.toFirstUpper» {
 					private List<«systemPort.interfaceRealization.interface.implementationName».Listener.«systemPort.interfaceRealization.realizationMode.toString.toLowerCase.toFirstUpper»> listeners = new LinkedList<«systemPort.interfaceRealization.interface.implementationName».Listener.«systemPort.interfaceRealization.realizationMode.toString.toLowerCase.toFirstUpper»>();
 «««					Cascade components need their raised events saved (multiple schedule of a component in a single turn)
@@ -150,7 +166,7 @@ class SynchronousCompositeComponentCodeGenerator {
 					
 					// Class for the setting of the boolean fields (events)
 					private class «systemPort.name.toFirstUpper»Util implements «systemPort.interfaceRealization.interface.implementationName».Listener.«systemPort.interfaceRealization.realizationMode.toString.toLowerCase.toFirstUpper» {
-						«FOR event : systemPort.outputEvents SEPARATOR "\n"»
+						«FOR event : systemPort.outputEvents SEPARATOR System.lineSeparator»
 							@Override
 							public void raise«event.name.toFirstUpper»(«event.generateParameters») {
 								isRaised«event.name.toFirstUpper» = true;
@@ -286,7 +302,7 @@ class SynchronousCompositeComponentCodeGenerator {
 			«ENDIF»
 			
 			/**  Getter for component instances, e.g., enabling to check their states. */
-			«FOR instance : component.components SEPARATOR "\n"»
+			«FOR instance : component.components SEPARATOR System.lineSeparator»
 				public «instance.type.generateComponentClassName» get«instance.name.toFirstUpper»() {
 					return «instance.name»;
 				}

@@ -1,12 +1,24 @@
+/********************************************************************************
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * SPDX-License-Identifier: EPL-1.0
+ ********************************************************************************/
 package hu.bme.mit.gamma.xsts.transformation.util
 
 import hu.bme.mit.gamma.expression.model.ConstantDeclaration
+import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration
 import hu.bme.mit.gamma.expression.model.TypeDeclaration
 import hu.bme.mit.gamma.expression.model.ValueDeclaration
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.expression.util.ComplexTypeUtil
 import hu.bme.mit.gamma.expression.util.FieldHierarchy
+import hu.bme.mit.gamma.statechart.interface_.Clock
 import hu.bme.mit.gamma.statechart.interface_.Event
 import hu.bme.mit.gamma.statechart.interface_.Port
 import hu.bme.mit.gamma.statechart.statechart.Region
@@ -32,7 +44,9 @@ class LowlevelNamings {
 	static def String getComponentParameterName(ParameterDeclaration parameter) '''«parameter.name»'''
 	static def String getName(VariableDeclaration variable) '''«variable.name»'''
 	static def String getName(TimeoutDeclaration timeout) '''«timeout.name»'''
+	static def String getName(Clock clock) '''«clock.name»'''
 	static def String getName(TypeDeclaration type) '''«type.name»'''
+	static def String getName(EnumerationLiteralDefinition literal) '''«literal.name»'''
 	
 	static def List<String> getInNames(ParameterDeclaration parameterDeclaration, Port port) {
 		return parameterDeclaration.namePostfixes.map['''«parameterDeclaration.getInName(port)»«it»''']

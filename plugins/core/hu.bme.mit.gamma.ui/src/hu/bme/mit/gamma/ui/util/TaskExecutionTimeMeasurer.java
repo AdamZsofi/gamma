@@ -14,7 +14,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EObject;
@@ -27,6 +26,8 @@ public class TaskExecutionTimeMeasurer implements TaskHook {
 	
 	private final int iterationCount;
 	private long startTime;
+	
+	private final boolean considerJit;
 	
 	private boolean isFirst = true;
 	private final List<Double> elapsedTimes = new ArrayList<Double>();
@@ -42,12 +43,14 @@ public class TaskExecutionTimeMeasurer implements TaskHook {
 	protected final Logger logger = Logger.getLogger("GammaLogger");
 	
 	public TaskExecutionTimeMeasurer(Calculator<Double> calculator, String fileName) {
-		this(1, calculator, fileName, TimeUnit.SECONDS);
+		this(1, false, calculator, fileName, TimeUnit.SECONDS);
 	}
 	
-	public TaskExecutionTimeMeasurer(int iterationCount,
+	public TaskExecutionTimeMeasurer(int iterationCount, boolean considerJit,
 			Calculator<Double> calculator, String fileName, TimeUnit unit) {
-		this.iterationCount = iterationCount + 1; // Due to Java JIT, we do not count the first one
+		this.iterationCount = iterationCount +
+				(considerJit ? 1 : 0); // Due to Java JIT, we do not count the first one
+		this.considerJit = considerJit;
 		this.calculator = calculator;
 		this.fileName = fileName;
 		this.unit = unit;
@@ -65,7 +68,7 @@ public class TaskExecutionTimeMeasurer implements TaskHook {
 		
 		isFirst = true;
 		elapsedTimes.clear();
-		logger.log(Level.INFO, "Starting measurement");
+		logger.info("Starting measurement");
 	}
 	
 	public int getIterationCount() {
@@ -73,20 +76,20 @@ public class TaskExecutionTimeMeasurer implements TaskHook {
 	}
 	
 	public void startIteration() {
-		logger.log(Level.INFO, "Starting iteration " + (elapsedTimes.size() + 1));
+		logger.info("Starting iteration " + (elapsedTimes.size() + 1));
 		startTime = System.nanoTime();
 	}
 	
 	public void endIteration() {
 		long endTime = System.nanoTime();
 		double time = (endTime - startTime) / getDivisor();
-		if (isFirst) {
+		if (isFirst && considerJit) {
 			isFirst = false;
-			logger.log(Level.INFO, "First (not counted) iteration has been finished");
+			logger.info("First (not considered) iteration has been finished");
 		}
 		else {
 			elapsedTimes.add(time);
-			logger.log(Level.INFO, "Finished iteration " + elapsedTimes.size() + ", result is " + time + " " + unit);
+			logger.info("Finished iteration " + elapsedTimes.size() + ", result is " + time + " " + unit);
 		}
 	}
 	
@@ -99,9 +102,9 @@ public class TaskExecutionTimeMeasurer implements TaskHook {
 		builder.append("Median: " + median + " " + unit);
 		
 		fileUtil.saveString(targetFile, builder.toString());
-		logger.log(Level.INFO, "Saved results in " + targetFile.getAbsolutePath());
+		logger.info("Saved results in " + targetFile.getAbsolutePath());
 		
-		logger.log(Level.INFO, "Finished measurement");
+		logger.info("Finished measurement");
 	}
 	
 	private double getDivisor() {

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2021 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -43,8 +43,15 @@ class GammaFileNamer {
 	public static final String UPPAAL_EMF_EXTENSION = "uppaal";
 	public static final String UPPAAL_MODEL_EXTENSION = "xml";
 	
+	public static final String PROMELA_MODEL_EXTENSION = "pml";
+	public static final String NUXMV_MODEL_EXTENSION = "smv";
+	
+	public static final String OCRA_MODEL_EXTENSION = "oss";
+	
 	public static final String UPPAAL_QUERY_EXTENSION = "q";
 	public static final String THETA_QUERY_EXTENSION = "prop";
+	public static final String PROMELA_QUERY_EXTENSION = "pmlp";
+	
 	//
 	
 	def String getPackageFileName(String fileName) '''«fileName.extensionlessName».«PACKAGE_XTEXT_EXTENSION»'''
@@ -73,9 +80,52 @@ class GammaFileNamer {
 	
 	def String getEmfXStsFileName(String fileName) '''«fileName.extensionlessName».«XSTS_EMF_EXTENSION»'''
 	
+	def String getPmlPromelaFileName(String fileName) '''«fileName.extensionlessName».«PROMELA_MODEL_EXTENSION»'''
+	
+	def String getPromelaQueryFileName(String fileName) '''«fileName.extensionlessName».«PROMELA_QUERY_EXTENSION»'''
+	
+	def String getSmvNuxmvFileName(String fileName) '''«fileName.extensionlessName».«NUXMV_MODEL_EXTENSION»'''
+	
+	def String getOcraFileName(String fileName) '''«fileName.extensionlessName».«OCRA_MODEL_EXTENSION»'''
+	
+	//
+	
+	def String getUnfoldedPackageUri(String uri) '''«uri.parent»«File.separator»«uri.fileName.unfoldedPackageFileName»'''
+	def String getEmfXStsUri(String uri) '''«uri.parent»«File.separator»«uri.fileName.emfXStsFileName»'''
+	def String getHiddenEmfXStsUri(String uri) '''«uri.parent»«File.separator»«uri.fileName.emfXStsFileName.toHiddenFileName»'''
+	
 	//
 	
 	def String getOriginalGcdComponentUri(String unfoldedComponentUri) '''«unfoldedComponentUri.parent»«File.separator»«unfoldedComponentUri.fileName.toUnhiddenFileName.packageFileName»'''
 	def String getOriginalGsmComponentUri(String unfoldedComponentUri) '''«unfoldedComponentUri.parent»«File.separator»«unfoldedComponentUri.fileName.toUnhiddenFileName»'''
+	
+	//
+	
+	def String getFileExtension(Object analysisLanguage) {
+		return analysisLanguage.toString.fileExtension
+	}
+	
+	def String getFileExtension(String analysisLanguage) {
+		val name = analysisLanguage.toUpperCase
+		switch (name) {
+			case "UPPAAL", case "XSTS_UPPAAL": {
+				return UPPAAL_MODEL_EXTENSION
+			}
+			case "THETA", case "XSTS": {
+				return XSTS_XTEXT_EXTENSION
+			}
+			case "SPIN", case "PROMELA": {
+				return PROMELA_MODEL_EXTENSION
+			}
+			case "SMV", case "NUXMV": {
+				return NUXMV_MODEL_EXTENSION
+			}
+			case "OCRA": {
+				return OCRA_MODEL_EXTENSION
+			}
+			default:
+				throw new IllegalArgumentException("Not known language: " + analysisLanguage)
+		}
+	}
 	
 }

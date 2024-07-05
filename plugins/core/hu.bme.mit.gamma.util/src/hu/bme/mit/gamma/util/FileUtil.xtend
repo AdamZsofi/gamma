@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -15,8 +15,12 @@ import java.io.FileWriter
 import java.util.AbstractMap
 import java.util.ArrayList
 import java.util.Collections
+import java.util.List
 import java.util.Map
 import java.util.Scanner
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+import org.eclipse.core.resources.IFile
 import org.eclipse.core.resources.IResource
 
 class FileUtil {
@@ -37,16 +41,71 @@ class FileUtil {
 	
 	def loadString(File file) {
 		val builder = new StringBuilder
+		
 		try (val scanner = new Scanner(file)) {
 			while (scanner.hasNext) {
 				builder.append(scanner.nextLine + System.lineSeparator)
 			}
 		}
+		
 		return builder.toString
+	}
+	
+	def loadLines(File file, int count) {
+		val builder = new StringBuilder
+		
+		var i = 0
+		try (val scanner = new Scanner(file)) {
+			while (i++ < count && scanner.hasNext) {
+				builder.append(scanner.nextLine + System.lineSeparator)
+			}
+		}
+		
+		return builder.toString
+	}
+	
+	def loadFirstLine(File file) {
+		return file.loadLines(1)
+	}
+	
+	def loadXml(File file) {
+		// https://mkyong.com/java/how-to-read-xml-file-in-java-dom-parser/
+		val documentBuilderFactory = DocumentBuilderFactory.newInstance
+		documentBuilderFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+		val documentBuilder = documentBuilderFactory.newDocumentBuilder
+		val document = documentBuilder.parse(file)
+		
+		document.documentElement.normalize
+		return document
 	}
 	
 	def toPath(String packageName) {
 		return packageName.replaceAll("\\.", "\\"+ File.separator)
+	}
+	
+	def List<File> getAllContainedFiles(File file) {
+		val files = newArrayList
+		
+		if (files !== null) {
+			val containedFiles = file.listFiles
+			if (containedFiles !== null) {
+				for (containedFile : containedFiles) {
+					if (containedFile.file) {
+						files += containedFile
+					}
+					else if (containedFile.directory) {
+						files += containedFile.allContainedFiles
+					}
+				}
+			}
+		}
+		
+		return files
+	}
+	
+	def getFile(IFile file) {
+		val fullPath = file.fullPath
+		return fullPath.toFile
 	}
 	
 	def getFile(File sourceFolder, String packageName, String className) {
@@ -63,18 +122,44 @@ class FileUtil {
 	
 	def getFileName(String fileUri) {
 		return fileUri.file.name
+	}
+	
+	def extendFileName(File file, String extensionString) {
+		val parent = file.parent
+		val extendedFile =  new File(parent + File.separator + file.extensionlessName + extensionString + "." + file.extension)
+		
+		return extendedFile
+	}
+	
+	def extendAndHideFileName(File file, String extensionString) {
+		val parent = file.parent
+		val extendedFile =  new File(parent + File.separator + file.extensionlessName.toHiddenFileName + extensionString + "." + file.extension)
+		
+		return extendedFile
+	}
+	
+	def getUnhiddenFileName(String fileUri) {
+		return fileUri.file.name.toUnhiddenFileName
 	} 
 	
 	def getExtensionlessName(File file) {
 		return file.name.extensionlessName
 	}
 	
+	def getUnhiddenExtensionlessName(File file) {
+		return file.name.unhiddenExtensionlessName
+	}
+	
 	def getExtensionlessName(String fileName) {
-		val lastIndex = fileName.lastIndexOf(".")
-		if (lastIndex <= 0) { // <= 0 so hidden files are handled
+		val lastIndex = fileName.extensionDotIndex // So hidden files are handled
+		if (lastIndex < 0) {
 			return fileName
 		}
 		return fileName.substring(0, lastIndex)
+	}
+	
+	def getUnhiddenExtensionlessName(String fileName) {
+		return fileName.toUnhiddenFileName.extensionlessName
 	}
 	
 	def getExtension(File file) {
@@ -82,11 +167,35 @@ class FileUtil {
 	}
 	
 	def getExtension(String fileName) {
-		val lastIndex = fileName.lastIndexOf(".")
-		if (lastIndex <= 0) { // <= 0 so hidden files are handled
+		val lastIndex = fileName.extensionDotIndex // So hidden files are handled
+		if (lastIndex < 0) {
 			return ""
 		}
 		return fileName.substring(lastIndex + 1)
+	}
+	
+	private def int getExtensionDotIndex(String fileName) {
+		val lastSeparatorIndex = Math.max(
+			fileName.lastIndexOf("/"), fileName.lastIndexOf("\\"))
+		
+		val index = fileName.lastIndexOf(".")
+		if (index <= 0 || index < lastSeparatorIndex) {
+			return -1 // Hidden file or no extension
+		}
+		val charBeforeDot = fileName.charAt(index - 1).toString
+		if (charBeforeDot == ".") {
+			return -1 // Hidden(hidden) file
+		}
+		
+		return index // Valid extension
+	}
+	
+	def hasExtension(String fileName) {
+		return fileName != fileName.extensionlessName
+	}
+	
+	def hasExtension(File file) {
+		return file.name.hasExtension
 	}
 	
 	def isHiddenFile(File file) {
@@ -162,27 +271,38 @@ class FileUtil {
 		file.delete
 	}
 	
-    /**
-     * Returns the next valid name for the file that is suffixed by indices.
-     */
-    def Map.Entry<String, Integer> getFileName(File folder, String fileName, String fileExtension) {
-    	val usedIds = new ArrayList<Integer>();
-    	folder.mkdirs();
-    	// Searching the trace folder for highest id
-    	for (File file: folder.listFiles()) {
-    		if (file.getName().matches(fileName + "[0-9]+\\." + fileExtension)) {
-    			// File extension needed to distinguish .get and .json
-    			val id = file.getName().substring(fileName.length(), file.getName().length() - ("." + fileExtension).length());
-    			usedIds.add(Integer.parseInt(id));
-    		}
-    	}
-    	if (usedIds.isEmpty()) {
-    		return new AbstractMap.SimpleEntry<String, Integer>(fileName + "0." + fileExtension, 0);
-    	}
-    	Collections.sort(usedIds);
-    	val biggestId = usedIds.get(usedIds.size() - 1);
-    	return new AbstractMap.SimpleEntry<String, Integer>(
-    			fileName + (biggestId + 1) + "." + fileExtension, (biggestId + 1));
-    }
+	def void forceDeleteOnExit(File file) {
+		file.deleteOnExit // "Files (or directories) are deleted in the reverse order they are registered"
+		if (file.isDirectory) {
+			for (subfile : file.listFiles) {
+				subfile.forceDeleteOnExit
+			}
+		}
+	}
+	
+	/**
+	 * Returns the next valid name for the file that is suffixed by indices.
+	 */
+	def Map.Entry<String, Integer> getFileName(File folder, String fileName, String fileExtension) {
+		val usedIds = new ArrayList<Integer>();
+		folder.mkdirs();
+		// Searching the trace folder for highest id
+		for (File file: folder.listFiles()) {
+			val name = file.getName();
+			if (name.matches(fileName + "[0-9]+\\." + fileExtension)) {
+				// File extension needed to distinguish .get and .json
+				val id = name.substring(fileName.length(),
+						name.length() - ("." + fileExtension).length());
+				usedIds.add(Integer.parseInt(id));
+			}
+		}
+		if (usedIds.isEmpty()) {
+			return new AbstractMap.SimpleEntry<String, Integer>(fileName + "0." + fileExtension, 0);
+		}
+		Collections.sort(usedIds);
+		val biggestId = usedIds.get(usedIds.size() - 1);
+		return new AbstractMap.SimpleEntry<String, Integer>(
+				fileName + (biggestId + 1) + "." + fileExtension, (biggestId + 1));
+	}
 	
 }

@@ -2,10 +2,10 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Gamma Verification Utility
 Bundle-SymbolicName: hu.bme.mit.gamma.verification.util
-Bundle-Version: 2.7.0.qualifier
+Bundle-Version: 2.11.0.qualifier
 Bundle-Vendor: BME-FTSRG
 Automatic-Module-Name: hu.bme.mit.gamma.verification.util
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Export-Package: hu.bme.mit.gamma.verification.result,
  hu.bme.mit.gamma.verification.util
 Require-Bundle: org.eclipse.emf.ecore,
@@ -14,5 +14,7 @@ Require-Bundle: org.eclipse.emf.ecore,
  org.eclipse.xtend.lib,
  org.eclipse.xtend.lib.macro,
  hu.bme.mit.gamma.trace.model,
+ hu.bme.mit.gamma.property.model,
  hu.bme.mit.gamma.util,
- hu.bme.mit.gamma.transformation.util
+ hu.bme.mit.gamma.transformation.util,
+ hu.bme.mit.gamma.querygenerator

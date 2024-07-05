@@ -18,7 +18,6 @@ import hu.bme.mit.gamma.statechart.interface_.Port
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.xsts.model.AssignmentAction
 import hu.bme.mit.gamma.xsts.model.XSTS
-import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 import java.util.List
 
@@ -34,7 +33,6 @@ class EventConnector {
 	// Auxiliary objects
 	protected final extension GammaEcoreUtil expressionUtil = GammaEcoreUtil.INSTANCE
 	protected final extension XstsActionUtil xStsActionUtil = XstsActionUtil.INSTANCE
-	protected final extension XSTSModelFactory xStsModelFactory = XSTSModelFactory.eINSTANCE
 	
 	// TODO Introduce EventReferenceToXstsVariableMapper
 	
@@ -124,6 +122,7 @@ class EventConnector {
 			}
 		}
 		// Out-event optimization - maybe this should be moved to the SystemReducer?
+		// Only optimizableSimplePorts as out events can trigger in-events upper in the hierarchy
 		for (optimizableSimplePort : optimizableSimplePorts) {
 			for (outEvent : optimizableSimplePort.outputEvents) {
 				val xStsOutEventVariable = mapper.getOutputEventVariable(outEvent, optimizableSimplePort)
@@ -143,7 +142,7 @@ class EventConnector {
 		for (xStsDeletableVariable : xStsDeletableVariables) {
 			for (xStsDeletableAssignmentAction : xStsAssignmentActions
 					.filter[it.lhs.accessedDeclaration === xStsDeletableVariable]) {
-				xStsDeletableAssignmentAction.remove // To speed up the process
+				xStsDeletableAssignmentAction.replaceWithEmptyAction
 			}
 			// Assignment removal before variable deletion!
 			xStsDeletableVariable.delete // Delete needed due to e.g., transientVariables list

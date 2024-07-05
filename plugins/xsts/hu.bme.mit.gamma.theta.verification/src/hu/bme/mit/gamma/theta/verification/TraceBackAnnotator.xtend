@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -22,7 +22,6 @@ import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.verification.util.TraceBuilder
 import java.util.NoSuchElementException
 import java.util.Scanner
-import java.util.logging.Level
 import java.util.logging.Logger
 
 import static com.google.common.base.Preconditions.checkState
@@ -38,7 +37,7 @@ class TraceBackAnnotator {
 	protected final Scanner traceScanner
 	protected final ThetaQueryGenerator thetaQueryGenerator
 	protected final extension XstsBackAnnotator xStsBackAnnotator
-	protected static final Object engineSynchronizationObject = new Object
+	protected static final Object engineSynchronizationObject = new Object // For the VIATRA engine in the query generator
 	
 	protected final Package gammaPackage
 	protected final Component component
@@ -50,6 +49,7 @@ class TraceBackAnnotator {
 	protected final extension TraceUtil traceUtil = TraceUtil.INSTANCE
 	protected final extension TraceBuilder traceBuilder = TraceBuilder.INSTANCE
 	protected final extension GammaEcoreUtil gammaEcoreUtil = GammaEcoreUtil.INSTANCE
+	
 	protected final Logger logger = Logger.getLogger("GammaLogger")
 	
 	new(Package gammaPackage, Scanner traceScanner) {
@@ -61,8 +61,6 @@ class TraceBackAnnotator {
 		this.traceScanner = traceScanner
 		this.sortTrace = sortTrace
 		this.component = gammaPackage.firstComponent
-		this.thetaQueryGenerator = new ThetaQueryGenerator(component)
-		this.xStsBackAnnotator = new XstsBackAnnotator(thetaQueryGenerator, ThetaArrayParser.INSTANCE)
 		val schedulingConstraintAnnotation = gammaPackage.annotations
 				.filter(SchedulingConstraintAnnotation).head
 		if (schedulingConstraintAnnotation !== null) {
@@ -70,6 +68,16 @@ class TraceBackAnnotator {
 		}
 		else {
 			this.schedulingConstraint = null
+		}
+		synchronized (engineSynchronizationObject) { // Due to the VIATRA engine
+			this.thetaQueryGenerator = new ThetaQueryGenerator(component)
+		}
+		this.xStsBackAnnotator = new XstsBackAnnotator(thetaQueryGenerator, ThetaArrayParser.INSTANCE)
+	}
+	
+	def ExecutionTrace synchronizeAndExecute() {
+		synchronized (engineSynchronizationObject) {
+			return execute
 		}
 	}
 	
@@ -85,7 +93,6 @@ class TraceBackAnnotator {
 		checkState(topComponentArguments.size == component.parameterDeclarations.size, 
 			"The number of top component arguments and top component parameters are not equal: " +
 				topComponentArguments.size + " - " + component.parameterDeclarations.size)
-		logger.log(Level.INFO, "The number of top component arguments is " + topComponentArguments.size)
 		trace.arguments += topComponentArguments.map[it.clone]
 		var step = createStep
 		trace.steps += step
@@ -140,7 +147,7 @@ class TraceBackAnnotator {
 							case ENVIRONMENT_CHECK: {
 								step.checkInEvents
 								// Add schedule
-								step.addComponentScheduling
+								step.addSchedulingIfNeeded
 								// Setting the state
 								state = BackAnnotatorState.STATE_CHECK
 							}
@@ -163,8 +170,14 @@ class TraceBackAnnotator {
 						if (thetaQueryGenerator.isSourceState(potentialStateString)) {
 							potentialStateString.parseState(step)
 						}
+						else if (thetaQueryGenerator.isDelay(id)) {
+							step.addTimeElapse(Integer.valueOf(value))
+						}
 						else if (thetaQueryGenerator.isSourceVariable(id)) {
 							id.parseVariable(value, step)
+						}
+						else if (id.isSchedulingVariable) {
+							id.addScheduling(value, step)
 						}
 						else if (thetaQueryGenerator.isSourceOutEvent(id)) {
 							id.parseOutEvent(value, step)
@@ -201,22 +214,20 @@ class TraceBackAnnotator {
 			}
 			// Checking the last state (in events must NOT be deleted here though)
 			step.checkStates
-			// Sorting if needed
-			if (sortTrace) {
-				trace.sortInstanceStates
-			}
 		} catch (NoSuchElementException e) {
 			// If there are not enough lines, that means there are no environment actions
 			step.actions += createReset
 		}
 		
 		trace.removeInternalEventRaiseActs
+		trace.removeTransientVariableReferences // They always have default values
+		trace.addUnraisedEventNegations
+		
+		if (sortTrace) {
+			trace.sortInstanceStates
+		}
 		
 		return trace
-	}
-	
-	def static getEngineSynchronizationObject() {
-		return engineSynchronizationObject
 	}
 	
 	enum BackAnnotatorState {INIT, STATE_CHECK, ENVIRONMENT_CHECK}

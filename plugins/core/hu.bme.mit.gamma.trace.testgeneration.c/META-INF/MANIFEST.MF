@@ -1,0 +1,16 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: C test generator
+Bundle-SymbolicName: hu.bme.mit.gamma.trace.testgeneration.c
+Bundle-Version: 2.11.0.qualifier
+Automatic-Module-Name: hu.bme.mit.gamma.trace.testgeneration.c
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Require-Bundle: com.google.guava,
+ org.eclipse.xtext.xbase.lib,
+ org.eclipse.xtend.lib,
+ org.eclipse.xtend.lib.macro,
+ hu.bme.mit.gamma.trace.model,
+ hu.bme.mit.gamma.xsts.codegeneration.c,
+ org.eclipse.core.resources,
+ org.eclipse.xtext
+Export-Package: hu.bme.mit.gamma.trace.testgeneration.c

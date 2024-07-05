@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2020-2022 Contributors to the Gamma project
+ * Copyright (c) 2020-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -34,6 +34,8 @@ import hu.bme.mit.gamma.genmodel.model.ProgrammingLanguage;
 import hu.bme.mit.gamma.genmodel.model.Verification;
 import hu.bme.mit.gamma.property.model.PropertyPackage;
 import hu.bme.mit.gamma.scenario.trace.generator.ScenarioStatechartTraceGenerator;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceStateReferenceExpression;
+import hu.bme.mit.gamma.statechart.composite.ComponentInstanceVariableReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.SynchronousComponentInstance;
 import hu.bme.mit.gamma.statechart.contract.StateContractAnnotation;
 import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
@@ -46,8 +48,6 @@ import hu.bme.mit.gamma.statechart.statechart.StatechartDefinition;
 import hu.bme.mit.gamma.statechart.util.StatechartUtil;
 import hu.bme.mit.gamma.trace.derivedfeatures.TraceModelDerivedFeatures;
 import hu.bme.mit.gamma.trace.model.ExecutionTrace;
-import hu.bme.mit.gamma.trace.model.InstanceStateConfiguration;
-import hu.bme.mit.gamma.trace.model.InstanceVariableState;
 import hu.bme.mit.gamma.trace.model.RaiseEventAct;
 import hu.bme.mit.gamma.trace.model.Step;
 import hu.bme.mit.gamma.trace.util.TraceUtil;
@@ -70,8 +70,9 @@ public class AdaptiveContractTestGenerationHandler extends TaskHandler {
 		super(file);
 	}
 
-	public void execute(AdaptiveContractTestGeneration testGeneration) throws IOException {
+	public void execute(AdaptiveContractTestGeneration testGeneration) throws IOException, InterruptedException {
 		// Setting target folder
+		setProjectLocation(testGeneration); // Before the target folder
 		setTargetFolder(testGeneration);
 		//
 		checkArgument(testGeneration.getProgrammingLanguages().size() == 1,
@@ -134,8 +135,8 @@ public class AdaptiveContractTestGenerationHandler extends TaskHandler {
 			}
 
 			// Clearing unnecessary data
-			traceUtil.clearAsserts(adaptiveTrace, InstanceStateConfiguration.class);
-			traceUtil.clearAsserts(adaptiveTrace, InstanceVariableState.class);
+			traceUtil.clearAsserts(adaptiveTrace, ComponentInstanceStateReferenceExpression.class);
+			traceUtil.clearAsserts(adaptiveTrace, ComponentInstanceVariableReferenceExpression.class);
 			// Targeting the reference to the monitored component
 			adaptiveTrace.setImport(StatechartModelDerivedFeatures.getContainingPackage(monitoredComponent));
 			adaptiveTrace.setComponent(monitoredComponent);
@@ -183,10 +184,13 @@ public class AdaptiveContractTestGenerationHandler extends TaskHandler {
 		}
 		fileUtil.forceDelete(temporaryTraceFolder);
 
+		
+		ProgrammingLanguage programmingLanguage = testGeneration.getProgrammingLanguages().get(0);
 		// Serializing traces
 		for (ExecutionTrace testTrace : testsTraces) {
 			serializer.serialize(targetFolderUri, traceFileName,
-					testFolderUri, testFileName, packageName, testTrace);
+					testFolderUri, testFileName, packageName, testTrace,
+					file, programmingLanguage);
 		}
 	}
 
@@ -254,23 +258,27 @@ public class AdaptiveContractTestGenerationHandler extends TaskHandler {
 	// Settings
 
 	private void setAdaptiveContractTestGeneration(AdaptiveContractTestGeneration testGeneration) {
-		checkArgument(testGeneration.getPackageName().size() <= 1);
-		checkArgument(testGeneration.getFileName().size() <= 1);
-		checkArgument(testGeneration.getTestFolder().size() <= 1);
-		if (testGeneration.getPackageName().isEmpty()) {
-			testGeneration.getPackageName().add(file.getProject().getName().toLowerCase());
+		List<String> packageNames = testGeneration.getPackageName();
+		List<String> fileNames = testGeneration.getFileName();
+		List<String> testFolders = testGeneration.getTestFolder();
+		checkArgument(packageNames.size() <= 1);
+		checkArgument(fileNames.size() <= 1);
+		checkArgument(testFolders.size() <= 1);
+		if (packageNames.isEmpty()) {
+			packageNames.add(
+					file.getProject().getName().toLowerCase());
 		}
-		if (testGeneration.getFileName().isEmpty()) {
-			testGeneration.getFileName().add(GammaFileNamer.EXECUTION_TRACE_FILE_NAME);
+		if (fileNames.isEmpty()) {
+			fileNames.add(GammaFileNamer.EXECUTION_TRACE_FILE_NAME);
 		}
-		if (testGeneration.getTestFolder().isEmpty()) {
-			testGeneration.getTestFolder().add("test-gen");
+		if (testFolders.isEmpty()) {
+			testFolders.add("test-gen");
 		}
-		this.packageName = testGeneration.getPackageName().get(0);
-		this.traceFileName = testGeneration.getFileName().get(0);
+		this.packageName = packageNames.get(0);
+		this.traceFileName = fileNames.get(0);
 		// Setting the attribute, the test folder is a RELATIVE path now from the
 		// project
-		String testFolder = testGeneration.getTestFolder().get(0);
+		String testFolder = testFolders.get(0);
 		this.testFolderUri = URI.decode(projectLocation + File.separator + testFolder);
 		this.testFileName = traceFileName + "Simulation";
 		// TargetFolder set in setTargetFolder

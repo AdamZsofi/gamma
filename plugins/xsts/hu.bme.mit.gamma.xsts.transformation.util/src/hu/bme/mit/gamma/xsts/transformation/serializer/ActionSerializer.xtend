@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -34,10 +34,15 @@ class ActionSerializer {
 	protected final extension DeclarationSerializer declarationSerializer = DeclarationSerializer.INSTANCE
 	protected final extension ExpressionSerializer expressionSerializer = ExpressionSerializer.INSTANCE
 	
-	def String serializeXsts(XSTS xSts) '''
-		«xSts.serializeDeclarations(false)»
+	def String serializeXsts(XSTS xSts) {
+		return xSts.serializeXsts(false)
+	}
+	
+	def String serializeXsts(XSTS xSts, boolean serializePrimedVariables) '''
+		«xSts.serializeDeclarations(serializePrimedVariables)»
 		
 		trans «FOR transition : xSts.transitions SEPARATOR " or "»{
+			«IF xSts.timed»__delay;«ENDIF»
 			«transition.action.serialize»
 		}«ENDFOR»
 		init {

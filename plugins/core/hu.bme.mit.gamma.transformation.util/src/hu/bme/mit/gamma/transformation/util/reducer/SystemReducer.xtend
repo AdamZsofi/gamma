@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -12,25 +12,29 @@ package hu.bme.mit.gamma.transformation.util.reducer
 
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.expression.util.ExpressionEvaluator
+import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter
 import hu.bme.mit.gamma.statechart.composite.BroadcastChannel
 import hu.bme.mit.gamma.statechart.composite.SimpleChannel
 import hu.bme.mit.gamma.statechart.composite.SynchronousComponentInstance
 import hu.bme.mit.gamma.statechart.composite.SynchronousCompositeComponent
 import hu.bme.mit.gamma.statechart.interface_.Package
+import hu.bme.mit.gamma.statechart.statechart.GuardEvaluation
+import hu.bme.mit.gamma.statechart.statechart.OrthogonalRegionSchedulingOrder
 import hu.bme.mit.gamma.statechart.statechart.Region
+import hu.bme.mit.gamma.statechart.statechart.SchedulingOrder
 import hu.bme.mit.gamma.statechart.statechart.SetTimeoutAction
 import hu.bme.mit.gamma.statechart.statechart.StateNode
 import hu.bme.mit.gamma.statechart.statechart.StateReferenceExpression
 import hu.bme.mit.gamma.statechart.statechart.StatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.TimeoutEventReference
 import hu.bme.mit.gamma.statechart.statechart.Transition
+import hu.bme.mit.gamma.statechart.statechart.TransitionPriority
 import hu.bme.mit.gamma.transformation.util.queries.Regions
 import hu.bme.mit.gamma.transformation.util.queries.RemovableTransitions
 import hu.bme.mit.gamma.transformation.util.queries.SimpleInstances
 import hu.bme.mit.gamma.transformation.util.queries.TopRegions
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.util.Collection
-import java.util.logging.Level
 import java.util.logging.Logger
 import org.eclipse.emf.ecore.resource.ResourceSet
 import org.eclipse.viatra.query.runtime.api.ViatraQueryEngine
@@ -40,6 +44,7 @@ import static extension hu.bme.mit.gamma.action.derivedfeatures.ActionModelDeriv
 import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
 
 class SystemReducer implements Reducer {
+	
 	protected final ViatraQueryEngine engine
 	// Storing the reduced states, so in-state expressions can be removed
 	protected final Collection<StateNode> removedUnreachableStates = newHashSet
@@ -51,7 +56,8 @@ class SystemReducer implements Reducer {
 	protected final extension Logger logger = Logger.getLogger("GammaLogger")
 	
 	new(ResourceSet resourceSet) {
-		this.engine = ViatraQueryEngine.on(new EMFScope(resourceSet))
+		this.engine = ViatraQueryEngine.on(
+				new EMFScope(resourceSet))
 	}
 	
 	override execute() {
@@ -66,6 +72,8 @@ class SystemReducer implements Reducer {
 				transition.removeTransition
 			}
 		}
+		//
+		statecharts.optimizeSemanticVariationPoints
 		//
 		statecharts.removeFalseGuardedTransitions
 		// Timeout optimizing
@@ -90,18 +98,18 @@ class SystemReducer implements Reducer {
 				statechart.variableDeclarations.clear
 				statechart.timeoutDeclarations.clear
 				statechart.transitions.clear
-				log(Level.INFO, "Removing statechart content: " + statechart.name)
+				info("Removing statechart content: " + statechart.name)
 			}
 			// Removing transitions who went out of a state from a removed region
 			for (transition : statechart.transitions.toSet /*To avoid concurrent modification*/ ) {
 				val source = transition.sourceState
 				val target = transition.targetState
 				try {
-					source.containingStatechart
-					target.containingStatechart
-				} catch (NullPointerException exception) {
-					log(Level.INFO, "Removing transition as source or target is deleted: " + source.name + " -> " + target.name)
-					transition.delete
+					source.containingStatechart.name // To invoke a nullptr
+					target.containingStatechart.name
+				} catch (NullPointerException e) {
+					info("Removing transition as source or target is deleted: " + source.name + " -> " + target.name)
+					transition.remove
 				}
 			}
 		}
@@ -113,15 +121,15 @@ class SystemReducer implements Reducer {
 	
 	private def void removeTransition(Transition transition) {
 		val target = transition.targetState
-		log(Level.INFO, "Removing transition " + transition.sourceState.name + " -> " + target.name)
+		info("Removing transition " + transition.sourceState.name + " -> " + target.name)
 		transition.remove
 		try {
-			if (target.incomingTransitions.size == 0 /* 0 due to transition.remove */) {
+			if (target.allIncomingTransitions.empty /* 0 due to transition.remove */) {
 				for (outgoingTransition : target.outgoingTransitions
 						.reject[it === transition] /* Addressing loops */) {
 					outgoingTransition.removeTransition
 				}
-				log(Level.INFO, "Removing state node " + target.name)
+				info("Removing state node " + target.name)
 				target.remove
 				removedUnreachableStates += target
 			}
@@ -149,33 +157,38 @@ class SystemReducer implements Reducer {
 			}
 		}
 		for (removableTimeout : removableTimeouts) {
-			log(Level.INFO, "Removing timeout declaration " + removableTimeout.name +
-				" of " + removableTimeout.containingStatechart.name)
+			info("Removing timeout declaration " + removableTimeout.name + " of " + 
+				removableTimeout.containingStatechart.name)
 			removableTimeout.remove
 		}
 	}
 	
 	private def void removeUnnecessaryRegion(Region region) {
+		val initialTransition = region.initialTransition
+		val stateNodes = region.stateNodes
 		val states = region.states
 		val pseudoStates = region.pseudoStates // E.g., choice might have an incoming transition from another transition
 		try {
-			if (pseudoStates.forall[it.precedingStates.empty] &&
-					states.forall[!it.composite && it.outgoingTransitions.empty &&
-					it.entryActions.forall[it.effectlessAction] && it.exitActions.forall[it.effectlessAction] ||
-					it.incomingTransitions.empty]) {
+			if (initialTransition.effects.forall[it.effectlessAction] &&
+					pseudoStates.forall[it.precedingStates.empty] &&
+					states.forall[(!it.composite && it.outgoingTransitions.empty &&
+							it.incomingTransitions.forall[states.contains(it.sourceState)] && // Considering transitions via regions
+							it.entryActions.forall[it.effectlessAction] &&
+							it.exitActions.forall[it.effectlessAction]) ||
+							it.allIncomingTransitions.empty]) { // Never true due to initial transition?
 				// First, removing all related transitions (as otherwise nullptr exceptions are generated in incomingTransitions)
 				val statechart = region.containingStatechart
-				statechart.transitions -= (states.map[it.incomingTransitions].flatten + 
-					states.map[it.outgoingTransitions].flatten).toList
+				statechart.transitions -= (stateNodes.map[it.allIncomingTransitions].flatten +
+						stateNodes.map[it.allOutgoingTransitions].flatten).toList
 				// Removing region
 				region.remove
-				log(Level.INFO, "Removing region " + region.name + " of " + statechart.name)
+				info("Removing region " + region.name + " of " + statechart.name)
 				// Selecting unreachable states and always active states
-				val unreachableStates = states.filter[it.incomingTransitions.empty].toList
-				val reachedStatesStates = states.filter[it.outgoingTransitions.empty].toList
-				reachedStatesStates -= unreachableStates
+				val unreachableStates = states.filter[it.allIncomingTransitions.empty].toList
+				val reachedStates = states.filter[it.allOutgoingTransitions.empty].toList
+				reachedStates -= unreachableStates
 				removedUnreachableStates += unreachableStates
-				removedInitialStates += reachedStatesStates
+				removedInitialStates += reachedStates
 			}
 		} catch (NullPointerException e) {
 			// An ancestor of a state has already been removed
@@ -192,7 +205,7 @@ class SystemReducer implements Reducer {
 				container.components -= instance
 				val _package = statechart.eContainer as Package
 				_package.components -= statechart
-				log(Level.INFO, "Removing statechart instance " + instance.name)
+				info("Removing statechart instance " + instance.name)
 				// Port binding remover
 				val unnecessaryPortBindings = container.portBindings
 					.filter[it.instancePortReference.instance === instance].toList
@@ -223,6 +236,55 @@ class SystemReducer implements Reducer {
 		return falseGuardedTransitions
 	}
 	
+	private def optimizeSemanticVariationPoints(Collection<StatechartDefinition> statecharts) {
+		for (statechart : statecharts) {
+			val hasOrthogonalRegions = statechart.hasOrthogonalRegions // Transitively
+			if (!hasOrthogonalRegions) {
+				statechart.guardEvaluation = GuardEvaluation.ON_THE_FLY
+				statechart.orthogonalRegionSchedulingOrder = OrthogonalRegionSchedulingOrder.SEQUENTIAL
+				info("Setting guard evaluation to on-the-fly and orthogonal region scheduling order to sequential")
+			}
+			//
+			if (statechart.hasContainerOfType(AsynchronousAdapter)) {
+				val adapter = statechart.getContainerOfType(AsynchronousAdapter)
+				if (adapter.whenAnyRunOnce) { // A single event/trigger a time
+					// Transition priority if outgoing transitions are always disjoint
+					var areTriggersDisjoint = true
+					val stateNodes = statechart.allStateNodes
+					for (stateNode : stateNodes) {
+						val outgoingTransitions = stateNode.outgoingTransitions
+						if (!outgoingTransitions.areTriggersDisjoint) {
+							areTriggersDisjoint = false
+						}
+					}
+					if (areTriggersDisjoint) {
+						statechart.transitionPriority = TransitionPriority.ORDER_BASED
+						info("Setting transition priority to order-based")
+					}
+					
+					// Top-down region scheduling if there are no occluding transitions
+					areTriggersDisjoint = true
+					if (stateNodes.exists[it.hasParentState]) {
+						val transitions = statechart.transitions.filter[it.leavingState] // Only for states
+						for (transition : transitions) {
+							val source = transition.sourceState
+							val outgoingTransitionsOfAncestors = source.outgoingTransitionsOfAncestors
+							for (outgoingTransitionsOfAncestor : outgoingTransitionsOfAncestors) {
+								if (!transition.areTriggersDisjoint(outgoingTransitionsOfAncestor)) {
+									areTriggersDisjoint = false
+								}
+							}
+						}
+					}
+					if (areTriggersDisjoint) {
+						statechart.schedulingOrder = SchedulingOrder.TOP_DOWN
+						info("Setting region scheduling order to top-down")
+					}
+				}
+			}
+		}
+	}
+	
 	private def removeFalseGuardedTransitions(Collection<StatechartDefinition> statecharts) {
 		val falseGuardedTransitions = statecharts.falseGuardedTransitions
 		for (transition : falseGuardedTransitions.reject[it.eContainer === null]) {
@@ -247,7 +309,7 @@ class SystemReducer implements Reducer {
 				if (newExpression !== null) {
 					// There should be no cross reference to the inStateExpression, hence the replace
 					newExpression.replace(inStateExpression)
-					log(Level.INFO, "Removing state reference " + region.name + "." + state.name)
+					info("Removing state reference " + region.name + "." + state.name)
 				}
 			}
 		}

@@ -20,6 +20,10 @@
         upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="targetFolder" unique="false"
         upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="timeout" eType="ecore:EClass ../../hu.bme.mit.gamma.statechart.model/model/interface.ecore#//TimeSpecification"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="iterationCount" eType="ecore:EClass ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//Expression"
+        containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="InterfaceCompilation" eSuperTypes="#//YakinduCompilation"/>
   <eClassifiers xsi:type="ecore:EClass" name="StatechartCompilation" eSuperTypes="#//YakinduCompilation">
@@ -43,6 +47,8 @@
         eType="#//Coverage" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="optimize" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
         defaultValueLiteral="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="optimizeEnvironmentalMessageQueues"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean" defaultValueLiteral="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="constraint" eType="#//Constraint"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="model" lowerBound="1" eType="#//ModelReference"
@@ -79,11 +85,15 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EEnum" name="ProgrammingLanguage">
     <eLiterals name="JAVA"/>
+    <eLiterals name="C" value="1"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EEnum" name="AnalysisLanguage">
     <eLiterals name="UPPAAL"/>
     <eLiterals name="THETA" value="1"/>
     <eLiterals name="XSTS_UPPAAL" value="2" literal="XSTS_UPPAAL"/>
+    <eLiterals name="PROMELA" value="3" literal="PROMELA"/>
+    <eLiterals name="NUXMV" value="4" literal="NUXMV"/>
+    <eLiterals name="OCRA" value="5" literal="OCRA"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="YakinduCompilation" abstract="true"
       eSuperTypes="#//Task">
@@ -159,6 +169,8 @@
       eSuperTypes="#//Task">
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="packageName" upperBound="-1"
         eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="projectName" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="programmingLanguages" upperBound="-1"
         eType="#//ProgrammingLanguage"/>
   </eClassifiers>
@@ -175,6 +187,8 @@
       eSuperTypes="#//Task">
     <eStructuralFeatures xsi:type="ecore:EReference" name="modelTransformation" lowerBound="1"
         eType="#//AnalysisModelTransformation" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="environmentModel" eType="#//ComponentReference"
+        containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="PhaseStatechartGeneration" eSuperTypes="#//Task ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//ArgumentedElement">
     <eStructuralFeatures xsi:type="ecore:EReference" name="statechart" lowerBound="1"
@@ -192,19 +206,33 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="propertyPackages" upperBound="-1"
         eType="ecore:EClass ../../hu.bme.mit.gamma.property.model/model/property.ecore#//PropertyPackage"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="optimizeModel" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="optimizeOutEvents" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="optimize" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="backAnnotateToOriginal"
         eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
   </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="TraceGeneration" eSuperTypes="#//Task">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="fullTraces" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+        defaultValueLiteral="false"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="variables" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="noTransitionCoverage" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+        defaultValueLiteral="false"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="variableLists" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="TraceReplayModelGeneration" eSuperTypes="#//Task">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="executionTrace" lowerBound="1"
-        eType="ecore:EClass ../../hu.bme.mit.gamma.trace.model/model/trace.ecore#//ExecutionTrace"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="executionTraceFolder" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="executionTrace" eType="ecore:EClass ../../hu.bme.mit.gamma.trace.model/model/trace.ecore#//ExecutionTrace"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="environmentModelFileName"
         upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="environmentModel" lowerBound="1"
         eType="#//EnvironmentModel"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="considerOutEvents" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
         defaultValueLiteral="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="analysisLanguages" upperBound="-1"
+        eType="#//AnalysisLanguage"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EEnum" name="EnvironmentModel">
     <eLiterals name="OFF" literal="OFF"/>
@@ -264,6 +292,7 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="UseIteratingVariable" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="AutomatonType" eType="#//ContractAutomatonType"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="TestType" eType="#//TestAutomatonType"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="RestartOnAccept" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EEnum" name="ContractAutomatonType">
     <eLiterals name="MONITOR"/>
@@ -272,5 +301,41 @@
   <eClassifiers xsi:type="ecore:EEnum" name="TestAutomatonType">
     <eLiterals name="POSITIVE"/>
     <eLiterals name="NEGATIVE" value="1"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="SafetyAssessment" abstract="true" eSuperTypes="#//Task">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="analysisModelTransformation"
+        eType="#//AnalysisModelTransformation" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="faultExtensionInstructionsFile"
+        upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="faultModesFile" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="propertyPackages" upperBound="-1"
+        eType="ecore:EClass ../../hu.bme.mit.gamma.property.model/model/property.ecore#//PropertyPackage"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="faultExtensionInstructions"
+        eType="ecore:EClass ../../hu.bme.mit.gamma.fei.model/model/fei.ecore#//FaultExtensionInstructions"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="visualize" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+        defaultValueLiteral="false"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="FaultTreeGeneration" eSuperTypes="#//SafetyAssessment"/>
+  <eClassifiers xsi:type="ecore:EClass" name="FmeaTableGeneration" eSuperTypes="#//SafetyAssessment">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="cardinality" eType="ecore:EClass ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//Expression"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="bmcBound" eType="ecore:EClass ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//Expression"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="ModelMutation" eSuperTypes="#//Task">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="model" lowerBound="1" eType="#//ModelReference"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="patternClassNames" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="MutationBasedTestGeneration" eSuperTypes="#//AbstractComplementaryTestGeneration">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="analysisModelTransformation"
+        lowerBound="1" eType="#//AnalysisModelTransformation" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="traceFolders" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="testClassNamePattern" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="patternClassNames" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
   </eClassifiers>
 </ecore:EPackage>

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -14,9 +14,11 @@ import hu.bme.mit.gamma.codegeneration.java.util.Namings
 import hu.bme.mit.gamma.codegeneration.java.util.TimingDeterminer
 import hu.bme.mit.gamma.statechart.composite.AbstractAsynchronousCompositeComponent
 import hu.bme.mit.gamma.statechart.composite.CompositeComponent
+import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.Port
 
 import static extension hu.bme.mit.gamma.codegeneration.java.util.Namings.*
+import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
 
 class CompositeComponentCodeGenerator {
@@ -60,11 +62,43 @@ class CompositeComponentCodeGenerator {
 		«ENDIF»
 	'''
 	
+	def generateResetMethods(Component component) '''
+		public void resetVariables() {
+			«FOR instance : component.containedComponents»
+				«instance.name».resetVariables();
+			«ENDFOR»
+		}
+		
+		public void resetStateConfigurations() {
+			«FOR instance : component.containedComponents»
+				«instance.name».resetStateConfigurations();
+			«ENDFOR»
+		}
+		
+		public void raiseEntryEvents() {
+			«FOR instance : component.containedComponents»
+				«instance.name».raiseEntryEvents();
+			«ENDFOR»
+		}
+	'''
+	
+	def executeHandleBeforeReset(Component component) '''
+		«FOR instance : component.containedComponents»
+			«instance.name».handleBeforeReset();
+		«ENDFOR»
+	'''
+	
+	def executeHandleAfterReset(Component component) '''
+		«FOR instance : component.containedComponents»
+			«instance.name».handleAfterReset();
+		«ENDFOR»
+	'''
+	
 	/**
 	 * Generates methods that for in-event raisings in the case of composite components.
 	 */
 	def CharSequence delegateRaisingMethods(Port systemPort) '''
-		«FOR event : systemPort.inputEvents SEPARATOR "\n"»
+		«FOR event : systemPort.inputEvents SEPARATOR System.lineSeparator»
 			@Override
 			public void raise«event.name.toFirstUpper»(«event.generateParameters») {
 				«FOR connector : systemPort.portBindings»
@@ -82,17 +116,29 @@ class CompositeComponentCodeGenerator {
 		«FOR event : systemPort.outputEvents»
 			@Override
 			public boolean isRaised«event.name.toFirstUpper»() {
-				«FOR connector : systemPort.portBindings»
-					return «connector.instancePortReference.instance.name».get«connector.instancePortReference.port.name.toFirstUpper»().isRaised«event.name.toFirstUpper»();
-				«ENDFOR»
+				«IF systemPort.portBindings.empty»
+					return false;
+				«ELSE»
+					«FOR connector : systemPort.portBindings»
+						return «connector.instancePortReference.instance.name».get«connector.instancePortReference.port.name.toFirstUpper»().isRaised«event.name.toFirstUpper»();
+					«ENDFOR»
+				«ENDIF»
 			}
 «««			ValueOf checks
 			«FOR parameter : event.parameterDeclarations»
 				@Override
 				public «parameter.type.transformType» get«parameter.name.toFirstUpper»() {
-					«FOR connector : systemPort.portBindings»
-						return «connector.instancePortReference.instance.name».get«connector.instancePortReference.port.name.toFirstUpper»().get«parameter.name.toFirstUpper»();
-					«ENDFOR»
+					«IF systemPort.portBindings.empty»
+						«IF parameter.type.primitive»
+							return «parameter.type.defaultExpression.serialize»;
+						«ELSE»
+							return null;
+						«ENDIF»
+					«ELSE»
+						«FOR connector : systemPort.portBindings»
+							return «connector.instancePortReference.instance.name».get«connector.instancePortReference.port.name.toFirstUpper»().get«parameter.name.toFirstUpper»();
+						«ENDFOR»
+					«ENDIF»
 				}
 			«ENDFOR»
 		«ENDFOR»
@@ -103,7 +149,7 @@ class CompositeComponentCodeGenerator {
 	 */
 	def CharSequence implementOutMethods(Port systemPort) '''
 «««		Simple flag checks
-		«FOR event : systemPort.outputEvents SEPARATOR "\n"»
+		«FOR event : systemPort.outputEvents SEPARATOR System.lineSeparator»
 			@Override
 			public boolean isRaised«event.name.toFirstUpper»() {
 				return isRaised«event.name.toFirstUpper»;
@@ -126,8 +172,8 @@ class CompositeComponentCodeGenerator {
 		«FOR instance : component.derivedComponents»
 			«instance.name» = new «instance.derivedType.generateComponentClassName»(«FOR argument : instance.arguments SEPARATOR ", "»«argument.serialize»«ENDFOR»);
 		«ENDFOR»
-		«FOR port : component.portBindings.map[it.compositeSystemPort]»
-			«port.name.toFirstLower» = new «port.name.toFirstUpper»();
+		«FOR port : component.allPorts»
+			«port.name.toFirstLower» = new «port.name.toFirstUpper»(); «IF !component.portBindings.exists[it.compositeSystemPort === port]»// Unbound«ENDIF»
 		«ENDFOR»
 	'''
 	

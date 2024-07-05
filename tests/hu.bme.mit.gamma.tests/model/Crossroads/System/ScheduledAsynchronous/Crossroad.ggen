@@ -30,6 +30,19 @@ analysis {
 	}
 }
 
+analysis {
+	component : Crossroad
+	language : SMV
+	file : "Crossroad-SMV"
+	state-coverage
+	constraint : {
+		top : {
+			minimum-orchestrating-period : 500 ms
+			maximum-orchestrating-period : 500 ms
+		}
+	}
+}
+
 //verification {
 //	language : Theta
 //	file : "Crossroad-Theta.xsts"
@@ -42,4 +55,13 @@ verification {
 	file : "Crossroad-XSTS.xml"
 	property-file : ".Crossroad-XSTS.gpd"
 	test-language : java
+	optimize-traces : true
+}
+
+verification {
+	language : nuXmv
+	file : "Crossroad-SMV.smv"
+	property-file : ".Crossroad-SMV.gpd"
+	test-language : java
+	optimize-traces : true
 }

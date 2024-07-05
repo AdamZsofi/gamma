@@ -2,10 +2,10 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Gamma UI
 Bundle-SymbolicName: hu.bme.mit.gamma.ui
-Bundle-Version: 2.7.0.qualifier
+Bundle-Version: 2.11.0.qualifier
 Bundle-Vendor: BME-FTSRG
 Automatic-Module-Name: hu.bme.mit.gamma.ui
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Require-Bundle: com.google.gson,
  org.eclipse.equinox.registry,
  org.eclipse.core.resources,
@@ -27,7 +27,6 @@ Require-Bundle: com.google.gson,
  hu.bme.mit.gamma.uppaal.verification,
  hu.bme.mit.gamma.eventpriority.transformation,
  hu.bme.mit.gamma.trace.testgeneration.java,
- hu.bme.mit.gamma.statechart.contract.testgeneration.java,
  hu.bme.mit.gamma.statechart.phase.transformation,
  hu.bme.mit.gamma.xsts.transformation,
  hu.bme.mit.gamma.transformation.util,
@@ -45,7 +44,16 @@ Require-Bundle: com.google.gson,
  hu.bme.mit.gamma.scenario.statechart.util,
  hu.bme.mit.gamma.scenario.statechart.generator,
  hu.bme.mit.gamma.scenario.model,
- hu.bme.mit.gamma.scenario.statechart.util
+ hu.bme.mit.gamma.scenario.statechart.util,
+ hu.bme.mit.gamma.promela.verification,
+ hu.bme.mit.gamma.xsts.promela.transformation,
+ hu.bme.mit.gamma.nuxmv.verification,
+ hu.bme.mit.gamma.xsts.nuxmv.transformation,
+ hu.bme.mit.gamma.fei.xsap.transformation,
+ hu.bme.mit.gamma.xsts.codegeneration.c,
+ hu.bme.mit.gamma.ocra.transformation,
+ hu.bme.mit.gamma.mutation,
+ hu.bme.mit.gamma.trace.testgeneration.c
 Export-Package: hu.bme.mit.gamma.ui,
  hu.bme.mit.gamma.ui.taskhandler,
  hu.bme.mit.gamma.ui.util
