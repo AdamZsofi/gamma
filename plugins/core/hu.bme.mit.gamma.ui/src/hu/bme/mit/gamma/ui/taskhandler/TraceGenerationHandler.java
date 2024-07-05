@@ -60,7 +60,8 @@ public class TraceGenerationHandler extends TaskHandler {
 	public void execute(TraceGeneration traceGeneration) throws IOException {
 		setTargetFolder(traceGeneration);
 		
-		File targetFolder = new File(targetFolderUri + File.separator + file.getName().split("\\.")[0] + File.separator);
+		File targetFolder = new File(targetFolderUri + File.separator + file.getName().split("\\.")[0] + File.separator + traceGeneration.getFileName().get(0).split("\\.")[0] + File.separator);
+		logger.log(Level.INFO, targetFolder.getAbsolutePath());
 		if (targetFolder.exists()) {
 			cleanFolder(targetFolder);			
 		} else {
@@ -78,15 +79,16 @@ public class TraceGenerationHandler extends TaskHandler {
 		List<String> variableList = traceGeneration.getVariables();
 		boolean useAbstraction = traceGeneration.getVariableLists().size() != 0;
 		
-		boolean fullTraces = traceGeneration.isFullTraces();
 		boolean noTransitionCoverage = traceGeneration.isNoTransitionCoverage();
 		String filePath = traceGeneration.getFileName().get(0);
-		File modelFile = new File(filePath);		
+		File modelFile = new File(filePath);
 		List<ExecutionTrace> retrievedTraces = new ArrayList<ExecutionTrace>();
 		ThetaTraceGenerator ttg = new ThetaTraceGenerator();
-		retrievedTraces = ttg.execute(modelFile, fullTraces, variableList, noTransitionCoverage, useAbstraction);
+		
+		retrievedTraces = ttg.execute(modelFile, variableList, noTransitionCoverage, useAbstraction);
 		logger.log(Level.INFO, "Number of received traces: " + retrievedTraces.size());
 
+		
 		for (ExecutionTrace trace : retrievedTraces) {
 			serializer.serialize(targetFolder.getAbsolutePath(), traceFileName, svgFileName,
 					testFolderUri, testFileName, "", trace);

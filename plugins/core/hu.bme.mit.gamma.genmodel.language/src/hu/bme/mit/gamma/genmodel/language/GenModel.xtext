@@ -326,7 +326,6 @@ TraceGeneration returns TraceGeneration: // Generate all traces with Theta
 					variables+=STRING
 				)*
 			'}'	|
-			'fullTraces' ':' fullTraces=BOOLEAN |
 			'noTransitionCoverage' ':' noTransitionCoverage=BOOLEAN
 		)*
 	'}'

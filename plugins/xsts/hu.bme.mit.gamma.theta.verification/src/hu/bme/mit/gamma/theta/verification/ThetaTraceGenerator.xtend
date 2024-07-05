@@ -36,26 +36,26 @@ class ThetaTraceGenerator {
 	final String ENVIRONMENT_VARIABLE_FOR_THETA_JAR = "THETA_XSTS_CLI_PATH"
 	protected final Logger logger = Logger.getLogger("GammaLogger")
 
-	def List<ExecutionTrace> execute(File modelFile, boolean fullTraces, List<String> variableList,
+	def List<ExecutionTrace> execute(File modelFile, List<String> variableList,
 			boolean noTransitionCoverage, boolean useAbstraction) {
 		val packageFileName = modelFile.name.unfoldedPackageFileName
 		val gammaPackage = ecoreUtil.normalLoad(modelFile.parent, packageFileName)
 
-		return generateTraces(gammaPackage, modelFile, fullTraces, variableList,
+		return generateTraces(gammaPackage, modelFile, variableList,
 				noTransitionCoverage, useAbstraction)
 	}
 
-	private def List<ExecutionTrace> generateTraces(Object traceability, File modelFile, boolean fullTraces,
+	private def List<ExecutionTrace> generateTraces(Object traceability, File modelFile,
 			List<String> variableList, boolean noTransitionCoverage, boolean useAbstraction) {
-		val traceDir = new File(modelFile.parent + File.separator + "traces")
+		val traceDir = new File(modelFile.parent + File.separator + "theta-traces" + File.separator)
 		cleanFolder(traceDir)
 		val jar = System.getenv(ENVIRONMENT_VARIABLE_FOR_THETA_JAR)
 		var command = #["java", "-jar", jar] +
 			#["--stacktrace", "--tracegen", "--search", "DFS", "--model", modelFile.canonicalPath, "--property",
 				modelFile.canonicalPath] // essential arguments are --tracegen, -- model and --property
-		if (fullTraces) {
+		/*if (fullTraces) {
 			command = command + #["--get-full-traces"]
-		}
+		}*/
 		if (useAbstraction) {
 			val varListFile = new File(modelFile.parent + File.separator + "variableList.txt")
 			varListFile.createNewFile()
@@ -69,12 +69,13 @@ class ThetaTraceGenerator {
 			writer.close()
 			command = command + #["--variable-list", modelFile.parent + File.separator + "variableList.txt"]
 		}
-		if (noTransitionCoverage) {
+		/*if (noTransitionCoverage) {
 			command = command + #["--no-transition-coverage"]
-		}
+		}*/
 
 		logger.log(Level.INFO, "Executing command: " + command.join(" "))
-		process = Runtime.getRuntime().exec(command)
+		val jarParent = (new File(jar)).parent
+		process = Runtime.getRuntime().exec(command, #[ "LD_LIBRARY_PATH="+jarParent ] )
 		val outputStream = process.inputStream
 		var resultReader = new Scanner(outputStream)
 		var line = ""
