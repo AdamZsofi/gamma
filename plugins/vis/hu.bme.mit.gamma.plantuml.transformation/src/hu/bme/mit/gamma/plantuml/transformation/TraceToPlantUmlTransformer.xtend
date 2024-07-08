@@ -98,7 +98,6 @@ class TraceToPlantUmlTransformer {
 			«FOR variableConstraint : step.instanceVariableStates.filter[it.instanceReference?.serialize == config.key].sortBy[it.variableDeclaration.name]»
 				«'''  '''»«variableConstraint.variableDeclaration.name» = «variableConstraint.otherOperandIfContainedByEquality.serialize»
 			«ENDFOR»
-		«ENDFOR»
 		endhnote
 	'''
 	
