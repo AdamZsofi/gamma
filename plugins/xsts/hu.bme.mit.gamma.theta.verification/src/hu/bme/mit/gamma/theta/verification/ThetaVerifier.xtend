@@ -88,7 +88,8 @@ class ThetaVerifier extends AbstractVerifier {
 					"--cex", traceFile.canonicalPath, "--stacktrace"]
 			// Executing the command
 			logger.info("Executing command: " + command.join(" "))
-			process = Runtime.getRuntime().exec(command)
+			val jarParent = (new File(jar)).parent
+			process = Runtime.getRuntime().exec(command, #[ "LD_LIBRARY_PATH="+jarParent ])
 			
 			val outputStream = process.inputStream
 			resultReader = new Scanner(outputStream)
