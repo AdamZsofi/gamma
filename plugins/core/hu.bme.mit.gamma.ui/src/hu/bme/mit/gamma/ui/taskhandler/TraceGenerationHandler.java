@@ -69,6 +69,7 @@ public class TraceGenerationHandler extends TaskHandler {
 		}
 		
 		// Based on the method setVerification in VerificationHandler
+		boolean fullTraces = traceGeneration.isFullTraces();
 		Resource resource = traceGeneration.eResource();
 		File file = (resource != null) ?
 				ecoreUtil.getFile(resource).getParentFile() : // If Verification is contained in a resource
@@ -85,7 +86,7 @@ public class TraceGenerationHandler extends TaskHandler {
 		List<ExecutionTrace> retrievedTraces = new ArrayList<ExecutionTrace>();
 		ThetaTraceGenerator ttg = new ThetaTraceGenerator();
 		
-		retrievedTraces = ttg.execute(modelFile, variableList, noTransitionCoverage, useAbstraction);
+		retrievedTraces = ttg.execute(modelFile, fullTraces, variableList, noTransitionCoverage, useAbstraction);
 		logger.log(Level.INFO, "Number of received traces: " + retrievedTraces.size());
 
 		
