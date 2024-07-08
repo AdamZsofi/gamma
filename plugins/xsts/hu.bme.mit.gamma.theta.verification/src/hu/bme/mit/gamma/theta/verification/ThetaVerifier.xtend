@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2023 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -148,6 +148,19 @@ class ThetaVerifier extends AbstractVerifier {
 		// Thread.currentThread.name is needed to prevent race conditions
 		return modelFile.parent + File.separator + modelFile.extensionlessName.toHiddenFileName +
 			"-" + Thread.currentThread.name + ".cex"
+	}
+	
+	override getHelpCommand() {
+		val jar = System.getenv(ENVIRONMENT_VARIABLE_FOR_THETA_JAR)
+		return #["java", "-jar", jar, "-h"]
+	}
+	
+	override getUnavailableBackendMessage() {
+		return "The command line tool of Theta ('theta-xsts-cli') cannot be found. " +
+				"Theta can be downloaded from 'https://github.com/ftsrg/theta/releases'. " +
+				"Make sure to create an environmental variable under the name 'THETA_XSTS_CLI_PATH' that " +
+					"points to the dowloaded Theta jar and also have the Z3 lib downloaded and installed" +
+						"(for detailed instructions, see 'https://github.com/ftsrg/gamma/blob/master/plugins/xsts/README.md')."
 	}
 	
 }

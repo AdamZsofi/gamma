@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2023 Contributors to the Gamma project
+ * Copyright (c) 2023-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -48,7 +48,7 @@ public class NewGammaPropertyWizardPage extends WizardPage {
 	public NewGammaPropertyWizardPage(ISelection selection) {
 		super("New Gamma Property Model");
 		setTitle("New Gamma Property Model");
-		setDescription("This wizard creates a new file with *.gpd extension.");
+		setDescription("This wizard creates a new Gamma Property Model with *.gpd extension.");
 		this.selection = selection;
 	}
 

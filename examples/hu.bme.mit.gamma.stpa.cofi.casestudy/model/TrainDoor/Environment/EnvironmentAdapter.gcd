@@ -1,0 +1,18 @@
+package packagename
+
+import "Environment.gcd"
+
+
+adapter EnvironmentAdapter of component environment : Environment [] {
+	
+	when any / run
+
+	queue internalQueue(priority = 2, capacity = 4) {
+		ControlActions.any
+	}
+	
+	queue environmentalQueue(priority = 1, capacity = 4) {
+		OpeningTimeout.any, ClosingTimeout.any
+	}
+
+}

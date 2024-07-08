@@ -41,6 +41,7 @@ import hu.bme.mit.gamma.expression.model.ElseExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
 import hu.bme.mit.gamma.expression.model.FunctionAccessExpression;
 import hu.bme.mit.gamma.expression.model.FunctionDeclaration;
+import hu.bme.mit.gamma.expression.model.NamedElement;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
 import hu.bme.mit.gamma.expression.model.RecordTypeDefinition;
 import hu.bme.mit.gamma.expression.model.Type;
@@ -380,6 +381,74 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	public static boolean hasAnnotation(StatechartDefinition statechart,
 			Class<? extends StatechartAnnotation> annotation) {
 		return statechart.getAnnotations().stream().anyMatch(it -> annotation.isInstance(it));
+	}
+	
+	public static TimeUnit getSmallestTimeUnit(NamedElement element) {
+		TimeUnit[] supportedTimeUnits = new TimeUnit[] { TimeUnit.NANOSECOND, // Order is important
+				TimeUnit.MICROSECOND, TimeUnit.MILLISECOND, TimeUnit.SECOND, TimeUnit.HOUR };
+		//
+		List<TimeSpecification> timeUnits = ecoreUtil.getAllContentsOfType(
+				element, TimeSpecification.class);
+		for (TimeUnit timeUnit : supportedTimeUnits) {
+			if (timeUnits.stream().anyMatch(it -> it.getUnit() == timeUnit)) {
+				return timeUnit;
+			}
+		}
+		// If none of the above: ms is default
+		return TimeUnit.MILLISECOND;
+	}
+	
+	public static long getMultiplicator(TimeUnit unit, TimeUnit base) {
+		long value = 1;
+		switch (unit) {
+			case NANOSECOND: {
+				break;
+			}
+			case MICROSECOND: {
+				value *= 1000;
+				break;
+			}
+			case MILLISECOND: {
+				value *= 1000000;
+				break;
+			}
+			case SECOND: {
+				value *= 1000000000;
+				break;
+			}
+			case HOUR: {
+				value *= 1000000000 * 60 * 60;
+				break;
+			}
+			default:
+				throw new IllegalArgumentException("Unexpected value: " + unit);
+		}
+		// Value is now in nanoseconds
+		switch (base) {
+			case NANOSECOND: {
+				break;
+			}
+			case MICROSECOND: {
+				value /= 1000;
+				break;
+			}
+			case MILLISECOND: {
+				value /= 1000000;
+				break;
+			}
+			case SECOND: {
+				value /= 1000000000;
+				break;
+			}
+			case HOUR: {
+				value /= 1000000000 * 60 * 60;
+				break;
+			}
+			default:
+				throw new IllegalArgumentException("Unexpected value: " + unit);
+		}
+		
+		return value;
 	}
 	
 	public static Set<Package> getImportableInterfacePackages(Component component) {
@@ -1714,6 +1783,32 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 		return events;
 	}
 	
+	public static List<Entry<Port, Event>> getTriggeringInputEvents(StatechartDefinition statechart) {
+		List<Entry<Port, Event>> events = new ArrayList<Entry<Port, Event>>();
+		
+		for (Transition transition : statechart.getTransitions()) {
+			events.addAll(
+					getTriggeringInputEvents(transition));
+		}
+		
+		return events;
+	}
+
+	private static List<Entry<Port, Event>> getTriggeringInputEvents(Transition transition) {
+		List<Entry<Port, Event>> events = new ArrayList<Entry<Port, Event>>();
+		
+		Trigger trigger = transition.getTrigger();
+		if (trigger != null) {
+			List<EventReference> eventReferences = ecoreUtil.getSelfAndAllContentsOfType(trigger, EventReference.class);
+			for (EventReference eventReference : eventReferences) {
+				events.addAll(
+						getInputEvents(eventReference));
+			}
+		}
+		
+		return events;
+	}
+	
 	public static List<Event> getInputEvents(Component component) {
 		return getInputEvents(
 				getAllPorts(component));
@@ -2025,6 +2120,9 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 		if (component instanceof AsynchronousAdapter adapter) {
 			return List.of(
 					adapter.getWrappedComponent());
+		}
+		if (component instanceof StatechartDefinition) {
+			return List.of();
 		}
 		throw new IllegalArgumentException("Not known type: " + component);
 	}
@@ -3202,7 +3300,7 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<State> getPrecedingStates(StateNode node) {
-		Set<State> precedingStates = new HashSet<State>();
+		Set<State> precedingStates = new LinkedHashSet<State>();
 		for (Transition incomingTransition : getIncomingTransitions(node)) {
 			StateNode source = incomingTransition.getSourceState();
 			if (source instanceof State state) {
@@ -3217,7 +3315,7 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<State> getReachableStates(StateNode node) { // Same level
-		Set<State> reachableStates = new HashSet<State>();
+		Set<State> reachableStates = new LinkedHashSet<State>();
 		for (Transition outgoingTransition : getOutgoingTransitions(node)) {
 			StateNode target = outgoingTransition.getTargetState();
 			if (target instanceof State state) {
@@ -3383,6 +3481,9 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 				return clonedTime;
 			case SECOND: {
 				return statechartUtil.wrapIntoMultiply(clonedTime, 1000);
+			}
+			case HOUR: {
+				return statechartUtil.wrapIntoMultiply(clonedTime, 1000 * 60 * 60);
 			}
 		default:
 			throw new IllegalArgumentException("Unexpected value: " + unit);

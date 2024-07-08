@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  * 
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -19,13 +19,15 @@ import hu.bme.mit.gamma.trace.model.Step
 import hu.bme.mit.gamma.trace.model.TimeElapse
 
 import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
+import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
 import static extension hu.bme.mit.gamma.trace.derivedfeatures.TraceModelDerivedFeatures.*
 
 class TraceToPlantUmlTransformer {
-	
+	//
 	protected final ExecutionTrace trace
 	// Utility
 	protected final extension ExpressionSerializer expressionSerializer = ExpressionSerializer.INSTANCE
+	//
 	
 	new(ExecutionTrace trace) {
 		this.trace = trace
@@ -49,7 +51,7 @@ class TraceToPlantUmlTransformer {
 		
 		title «trace.name» of «trace.component.name»
 		
-		participant "«trace.component.name»" as System <<SUT>>
+		participant "«trace.component.name»" as System <<«"SUT".addKeywordStyle»>>
 		
 		«FOR step : trace.steps»
 			«step.serialize»
@@ -67,12 +69,14 @@ class TraceToPlantUmlTransformer {
 	
 	protected def serialize(Step step) '''
 		«FOR time : step.actions.filter(TimeElapse)»
-			...wait «time.elapsedTime.serialize»ms...
+			...«"wait".addKeywordStyle» «time.elapsedTime.serialize» «"ms".addKeywordStyle»...
 		«ENDFOR»
 		
+		«IF step.needsInEventGroup»group unordered«ENDIF»
 		«FOR act : step.actions.filter(RaiseEventAct)»
 			[o-> System : «act.port.name».«act.event.name»(«FOR argument : act.arguments SEPARATOR ', '»«argument.serialize»«ENDFOR»)
 		«ENDFOR»
+		«IF step.needsInEventGroup»end«ENDIF»
 		
 		«FOR act : step.actions.filter(ComponentSchedule)»
 			== Execute ==
@@ -82,19 +86,32 @@ class TraceToPlantUmlTransformer {
 			== Execute «act.instanceReference.componentInstance.name» ==
 		«ENDFOR»
 		
-		
+		«IF step.needsOutEventGroup»group unordered«ENDIF»
 		«FOR act : step.outEvents»
 			System ->o] : «act.port.name».«act.event.name»(«FOR argument : act.arguments SEPARATOR ', '»«argument.serialize»«ENDFOR»)
 		«ENDFOR»
+		«IF step.needsOutEventGroup»end«ENDIF»
 		
 		hnote over System
 		«FOR config : step.instanceStateConfigurations.groupBy[it.instance?.serialize].entrySet.sortBy[it.key]»
-			«config.key» in {«config.value.map[it.state.name].join(", ")»} «IF step.instanceVariableStates.exists[it.instanceReference?.serialize == config.key]»with«ENDIF»
+			«config.key» «"in".addKeywordStyle» {«config.value.map[it.state.name].join(", ")»} «IF step.instanceVariableStates.exists[it.instanceReference?.serialize == config.key]»«"with".addKeywordStyle»«ENDIF»
 			«FOR variableConstraint : step.instanceVariableStates.filter[it.instanceReference?.serialize == config.key].sortBy[it.variableDeclaration.name]»
 				«'''  '''»«variableConstraint.variableDeclaration.name» = «variableConstraint.otherOperandIfContainedByEquality.serialize»
 			«ENDFOR»
 		«ENDFOR»
 		endhnote
 	'''
+	
+	protected def needsInEventGroup(Step step) {
+		return step.component.synchronous && step.actions.filter(RaiseEventAct).size > 1
+	}
+	
+	protected def needsOutEventGroup(Step step) {
+		return step.component.synchronous && step.outEvents.size > 1
+	}
+	
+	//
+	
+	protected def addKeywordStyle(String keyword) '''<b>«keyword»</b>'''
 	
 }

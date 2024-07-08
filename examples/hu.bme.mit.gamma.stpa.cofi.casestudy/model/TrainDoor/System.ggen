@@ -1,0 +1,13 @@
+import "System.gcd"
+
+analysis-model {
+	component : TrainDoor
+	language : SMV
+}
+
+verification {
+	file : "System.smv"
+	property-file : "System.gpd"
+	language : nuXmv
+	test-language : java
+}

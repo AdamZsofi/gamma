@@ -1,0 +1,136 @@
+package traindoorcontrol
+
+import "Interface/Interface.gcd"
+
+@OrthogonalRegionSchedule = sequential
+@TransitionPriority = order-based
+statechart TrainDoorController [
+	port ControlActions : provides ControlActions
+	port FeedbackDoorState : requires FeedbackDoorState
+	port FeedbackPresence : requires FeedbackPresence
+	port ExternalCommunication : requires ExternalCommunication
+	port OpenTimeout : requires Timeout { invariant OpenTimeout.^timeout:: imply in-state(DoorStateRegion.Open) }
+] {
+	region DoorStateRegion {
+		initial InitialDoorState
+		state Closing
+		state Closed
+		state Opening
+		state Open
+	}
+	transition from InitialDoorState to Closed
+	transition from Closed to Opening when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::OPENING]
+	transition from Opening to Open when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::OPEN]
+	transition from Opening to Closing when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::CLOSING]
+	transition from Open to Closing when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::CLOSING]
+	transition from Closing to Closed when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::CLOSED]
+	transition from Closing to Opening when FeedbackDoorState.feedback [FeedbackDoorState.feedback::doorState == DoorState::OPENING]
+	// Need these to allow for measuring time upon state change
+	region PresenceRegion {
+		initial InitialPresence
+		state NoneInDoorway
+		state PersonInDoorway
+	}
+	transition from InitialPresence to NoneInDoorway
+	transition from NoneInDoorway to PersonInDoorway when FeedbackPresence.feedback [FeedbackPresence.feedback::isPresent]
+	transition from PersonInDoorway to NoneInDoorway when FeedbackPresence.feedback [!FeedbackPresence.feedback::isPresent]
+	
+	region EmergencyRegion {
+		initial InitialEmergency
+		state NoEmergency
+		state Emergency
+	}
+	transition from InitialEmergency to NoEmergency
+	transition from NoEmergency to Emergency when ExternalCommunication.emergency [ExternalCommunication.emergency::isOccurred]
+	transition from Emergency to NoEmergency when ExternalCommunication.emergency [!ExternalCommunication.emergency::isOccurred]
+	
+	region AlignmentRegion {
+		initial InitialAlignment
+		state Aligned
+		state Unaligned
+	}
+	transition from InitialAlignment to Aligned
+	transition from Aligned to Unaligned when ExternalCommunication.alignment [!ExternalCommunication.alignment::isAligned]
+	transition from Unaligned to Aligned when ExternalCommunication.alignment [ExternalCommunication.alignment::isAligned]
+	
+	region MovementRegion {
+		initial InitialMovement
+		state Still
+		state InMotion {
+			region MotionRegion {
+				initial InitialMotion
+				choice InitialChoice
+				state UncategorizedMotion
+				state Arriving
+				state Departing
+			}
+		}
+	}
+	transition from InitialMovement to Still
+	transition from Still to InMotion when ExternalCommunication.movement [ExternalCommunication.movement::motionState != MotionState::STILL]
+	transition from InMotion to Still when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::STILL]
+	//
+	transition from InitialMotion to InitialChoice
+	
+	transition from InitialChoice to UncategorizedMotion [ExternalCommunication.movement::motionState == MotionState::UNCATEGORIZED_MOTION]
+	transition from InitialChoice to Arriving [ExternalCommunication.movement::motionState == MotionState::ARRIVING]
+	transition from InitialChoice to Departing [ExternalCommunication.movement::motionState == MotionState::DEPARTING]
+	
+	transition from UncategorizedMotion to Departing when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::DEPARTING]
+	transition from UncategorizedMotion to Arriving when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::ARRIVING]
+	transition from Arriving to UncategorizedMotion when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::UNCATEGORIZED_MOTION]
+	transition from Arriving to Departing when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::DEPARTING]
+	transition from Departing to UncategorizedMotion when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::UNCATEGORIZED_MOTION]
+	transition from Departing to Arriving when ExternalCommunication.movement [ExternalCommunication.movement::motionState == MotionState::ARRIVING]
+	
+	region ControlRegion {
+		initial InitialControl
+		state Control
+		merge OpenDoor
+		merge CloseDoor
+	}
+	transition from InitialControl to Control
+	// Consider priority between these transitions
+	// Open
+	// SC-1
+	transition from Control to OpenDoor when cycle [
+			!(in-state(DoorStateRegion.Opening) or in-state(DoorStateRegion.Open)) and // Needed?
+			in-state(EmergencyRegion.Emergency)]
+	//// Close - SC-A We close the door if the train sets out and there is no one in the door
+	transition from Control to CloseDoor when cycle [
+			!(in-state(DoorStateRegion.Closing) or in-state(DoorStateRegion.Closed)) and
+			!in-state(PresenceRegion.PersonInDoorway) and
+			(in-state(MovementRegion.InMotion) or in-state(AlignmentRegion.Unaligned))]
+	//// Open - SC-3
+	transition from Control to Control when cycle [ // Self-loop: needed?
+			in-state(MovementRegion.InMotion)]
+	// SC-4
+	transition from Control to Control when cycle [ // Self-loop: needed?
+			in-state(AlignmentRegion.Unaligned)]
+	// SC-2
+	transition from Control to OpenDoor when cycle [
+			!(in-state(DoorStateRegion.Opening) or in-state(DoorStateRegion.Open)) and // Needed?
+			in-state(PresenceRegion.PersonInDoorway)]
+	// SC-C
+	transition from Control to OpenDoor when cycle [
+			!(in-state(DoorStateRegion.Opening) or in-state(DoorStateRegion.Open)) and // Needed?
+			in-state(MovementRegion.Still) and in-state(AlignmentRegion.Aligned)]
+	
+	transition from OpenDoor to Control / raise ControlActions.controlDoor(ControlAction::OPEN);
+	
+	// Close
+	// SC-7
+	transition from Control to Control when cycle [ // Self-loop: conflict with open
+			in-state(PresenceRegion.PersonInDoorway)]
+	// SC-8
+	transition from Control to Control when cycle [ // Self-loop: conflict with open
+			in-state(EmergencyRegion.Emergency)]
+	// SC-B We close after a timeout
+	transition from Control to CloseDoor when OpenTimeout.^timeout [in-state(DoorStateRegion.Open)]
+	// SC-* Else we close
+//	transition from Control to CloseDoor when cycle
+//			[!(in-state(DoorStateRegion.Closing) or in-state(DoorStateRegion.Closed))] // Needed?
+	
+	transition from CloseDoor to Control / raise ControlActions.controlDoor(ControlAction::CLOSE);
+
+}

@@ -175,7 +175,8 @@ public class StatechartUtil extends ActionUtil {
 	}
 	
 	public ComponentInstanceReferenceExpression createInstanceReference(ComponentInstance instance) {
-		return createInstanceReference(List.of(instance));
+		return createInstanceReference(
+				List.of(instance));
 	}
 	
 	public ComponentInstanceReferenceExpression createInstanceReference(List<? extends ComponentInstance> instances) {
@@ -449,12 +450,33 @@ public class StatechartUtil extends ActionUtil {
 		int value = evaluator.evaluateInteger(time.getValue());
 		TimeUnit unit = time.getUnit();
 		switch (unit) {
-		case MILLISECOND:
-			return value;
-		case SECOND:
-			return value * 1000;
-		default:
-			throw new IllegalArgumentException("Not known unit: " + unit);
+			case MILLISECOND:
+				return value;
+			case SECOND:
+				return value * 1000;
+			case HOUR:
+				return value * 1000 * 60 * 60;
+			default:
+				throw new IllegalArgumentException("Not known unit: " + unit);
+		}
+	}
+	
+	public long evaluateNanoseconds(TimeSpecification time) {
+		long value = evaluator.evaluateInteger(time.getValue());
+		TimeUnit unit = time.getUnit();
+		switch (unit) {
+			case NANOSECOND:
+				return value;
+			case MICROSECOND:
+				return value * 1000;
+			case MILLISECOND:
+				return value * 1000000;
+			case SECOND:
+				return value * 1000000000;
+			case HOUR:
+				return value * 1000000000 * 60 * 60;
+			default:
+				throw new IllegalArgumentException("Not known unit: " + unit);
 		}
 	}
 	
@@ -653,6 +675,36 @@ public class StatechartUtil extends ActionUtil {
 		List<ComponentInstanceReferenceExpression> executionList = composite.getExecutionList();
 		for (ComponentInstance componentInstance : instances) {
 			executionList.add(createInstanceReference(componentInstance));
+		}
+	}
+	
+	public void setType(ComponentInstance instance, Component type) {
+		if (instance instanceof SynchronousComponentInstance synchronousInstance) {
+			SynchronousComponent synchronousType = (SynchronousComponent) type;
+			synchronousInstance.setType(synchronousType);
+		}
+		else if (instance instanceof AsynchronousComponentInstance asynchronousInstance) {
+			AsynchronousComponent asynchronousType = (AsynchronousComponent) type;
+			asynchronousInstance.setType(asynchronousType);
+		}
+		else {
+			throw new IllegalArgumentException("Not known type: " + type);
+		}
+	}
+	
+	public void setInstanceTypes(CompositeComponent changeable, CompositeComponent target) {
+		List<? extends ComponentInstance> changeableInstances = StatechartModelDerivedFeatures.getDerivedComponents(changeable);
+		List<? extends ComponentInstance> targetInstances = StatechartModelDerivedFeatures.getDerivedComponents(target);
+		setInstanceTypes(changeableInstances, targetInstances);
+	}
+
+	public void setInstanceTypes(List<? extends ComponentInstance> changeableInstances,
+			List<? extends ComponentInstance> targetInstances) {
+		for (int i = 0; i < changeableInstances.size(); i++) {
+			ComponentInstance changeableInstance = changeableInstances.get(i);
+			ComponentInstance targetInstance = targetInstances.get(i);
+			setType(changeableInstance,
+					StatechartModelDerivedFeatures.getDerivedType(targetInstance));
 		}
 	}
 	

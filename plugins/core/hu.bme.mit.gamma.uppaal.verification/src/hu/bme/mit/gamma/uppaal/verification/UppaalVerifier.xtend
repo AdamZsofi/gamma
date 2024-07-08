@@ -34,7 +34,7 @@ class UppaalVerifier extends AbstractVerifier {
 			
 			// Executing the command
 			logger.info("Executing command: " + command.join(" "))
-			process =  Runtime.getRuntime().exec(command)
+			process = Runtime.getRuntime().exec(command)
 			val outputStream = process.inputStream
 			val errorStream = process.errorStream
 			
@@ -108,8 +108,18 @@ class UppaalVerifier extends AbstractVerifier {
 	}
 	
 	override cancel() {
-		resultLogger.cancel
+		resultLogger?.cancel
 		super.cancel
+	}
+	
+	override getHelpCommand() {
+		return #["verifyta", "-h"]
+	}
+	
+	override getUnavailableBackendMessage() {
+		return "The command line tool of UPPAAL ('verifyta') cannot be found. " +
+				"UPPAAL can be downloaded from 'https://uppaal.org/downloads/'. " +
+				"Make sure to add the folder containing the 'verifyta' bin to your path environment variable."
 	}
 	
 }

@@ -41,6 +41,7 @@ import hu.bme.mit.gamma.xsts.model.Action;
 import hu.bme.mit.gamma.xsts.model.ActionAnnotation;
 import hu.bme.mit.gamma.xsts.model.AssignmentAction;
 import hu.bme.mit.gamma.xsts.model.AssumeAction;
+import hu.bme.mit.gamma.xsts.model.AsynchronousSystemAnnotation;
 import hu.bme.mit.gamma.xsts.model.AtomicAction;
 import hu.bme.mit.gamma.xsts.model.EmptyAction;
 import hu.bme.mit.gamma.xsts.model.EnvironmentalInvariantAnnotation;
@@ -49,9 +50,11 @@ import hu.bme.mit.gamma.xsts.model.IfAction;
 import hu.bme.mit.gamma.xsts.model.InternalInvariantAnnotation;
 import hu.bme.mit.gamma.xsts.model.InvariantAnnotation;
 import hu.bme.mit.gamma.xsts.model.LoopAction;
+import hu.bme.mit.gamma.xsts.model.MessageQueueGroup;
 import hu.bme.mit.gamma.xsts.model.MultiaryAction;
 import hu.bme.mit.gamma.xsts.model.PrimedVariable;
 import hu.bme.mit.gamma.xsts.model.SequentialAction;
+import hu.bme.mit.gamma.xsts.model.SynchronousSystemAnnotation;
 import hu.bme.mit.gamma.xsts.model.VariableDeclarationAction;
 import hu.bme.mit.gamma.xsts.model.XSTS;
 import hu.bme.mit.gamma.xsts.model.XSTSModelFactory;
@@ -72,6 +75,20 @@ public class XstsDerivedFeatures extends ExpressionModelDerivedFeatures {
 	
 	public static XSTS getContainingXsts(EObject object) {
 		return ecoreUtil.getSelfOrContainerOfType(object, XSTS.class);
+	}
+	
+	public static boolean isSynchronous(XSTS xSts) {
+		return hasAnnotation(xSts, SynchronousSystemAnnotation.class);
+	}
+	
+	public static boolean isAsynchronous(XSTS xSts) {
+		return hasAnnotation(xSts, AsynchronousSystemAnnotation.class);
+	}
+	
+	public static boolean isSimplifiedAsynchronousAdapter(XSTS xSts) {
+		return isAsynchronous(xSts) && xSts.getVariableGroups().stream()
+				.noneMatch(it -> it.getAnnotation() instanceof MessageQueueGroup &&
+						!it.getVariables().isEmpty());
 	}
 	
 	public static boolean hasAnnotation(XSTS xSts, Class<? extends XstsAnnotation> annotation) {

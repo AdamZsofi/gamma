@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.emf.ecore.EObject;
+
 import hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures;
 import hu.bme.mit.gamma.expression.model.ArgumentedElement;
 import hu.bme.mit.gamma.expression.model.BinaryExpression;
@@ -30,6 +32,7 @@ import hu.bme.mit.gamma.statechart.composite.ComponentInstanceStateReferenceExpr
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceVariableReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.SynchronousComponentInstance;
 import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
+import hu.bme.mit.gamma.statechart.interface_.Component;
 import hu.bme.mit.gamma.statechart.interface_.Event;
 import hu.bme.mit.gamma.statechart.interface_.EventParameterReferenceExpression;
 import hu.bme.mit.gamma.statechart.statechart.RaiseEventAction;
@@ -45,6 +48,7 @@ import hu.bme.mit.gamma.trace.model.NegativeTestAnnotation;
 import hu.bme.mit.gamma.trace.model.RaiseEventAct;
 import hu.bme.mit.gamma.trace.model.Step;
 import hu.bme.mit.gamma.trace.model.TimeElapse;
+import hu.bme.mit.gamma.trace.model.TimeUnitAnnotation;
 
 public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 	//
@@ -59,6 +63,11 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 			return trace.getComponent().getParameterDeclarations();
 		}
 		throw new IllegalArgumentException("Not supported element: " + element);
+	}
+	
+	public static ExecutionTrace getContainingExecutionTrace(EObject object) {
+		ExecutionTrace trace = ecoreUtil.getContainerOfType(object, ExecutionTrace.class);
+		return trace;
 	}
 	
 	// Annotations
@@ -89,6 +98,11 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 				ExecutionTraceAllowedWaitingAnnotation.class).get(0);
 	}
 	
+	public static TimeUnitAnnotation getTimeUnitAnnotation(ExecutionTrace trace) {
+		List<ExecutionTraceAnnotation> annotations = trace.getAnnotations();
+		return javaUtil.filterIntoList(annotations, TimeUnitAnnotation.class).get(0);
+	}
+	
 	public static boolean isNegativeTest(ExecutionTrace trace) {
 		return hasAnnotation(trace, NegativeTestAnnotation.class);
 	}
@@ -104,6 +118,12 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 	public static String getComment(ExecutionTrace trace) {
 		ExecutionTraceCommentAnnotation annotation = getCommentAnnotation(trace);
 		return annotation.getComment();
+	}
+	
+	public static Component getComponent(EObject object) {
+		ExecutionTrace trace = ecoreUtil.getSelfOrContainerOfType(object, ExecutionTrace.class);
+		Component component = trace.getComponent();
+		return component;
 	}
 	
 	//

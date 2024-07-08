@@ -287,4 +287,15 @@ class NuxmvVerifier extends AbstractVerifier {
 		return firstLine.startsWith("@TIME_DOMAIN") && firstLine.endsWith("continuous")
 	}
 	
+	override getHelpCommand() {
+		return #["nuXmv", "-h"]
+	}
+	
+	override getUnavailableBackendMessage() {
+		return "The command line tool of nuXmv ('nuXmv') cannot be found. " +
+				"nuXmv can be downloaded from 'https://nuxmv.fbk.eu/download.html'. " +
+				"Make sure to add the folder containing the 'nuXmv' bin to your path environment variable " +
+					"(for detailed instructions, see 'https://github.com/ftsrg/gamma/blob/master/plugins/nuxmv/README.md')."
+	}
+	
 }

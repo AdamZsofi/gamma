@@ -133,6 +133,23 @@ public class VerificationHandler extends TaskHandler {
 	
 	//
 	
+	public boolean isExecutable(Verification verification) {
+		AbstractVerification verificationInstance = getVerification(verification);
+		return verificationInstance.isBackendAvailable();
+	}
+	
+	public boolean isExecutable(AnalysisLanguage language) {
+		AbstractVerification verificationInstance = getVerification(language);
+		return verificationInstance.isBackendAvailable();
+	}
+	
+	public String getUnavailableBackendMessage(AnalysisLanguage language) {
+		AbstractVerification verificationInstance = getVerification(language);
+		return verificationInstance.getUnavailableBackendMessage();
+	}
+	
+	//
+	
 	public void execute(Verification verification) throws IOException, InterruptedException {
 		// Setting target folder
 		setProjectLocation(verification); // Before the target folder
@@ -387,6 +404,8 @@ public class VerificationHandler extends TaskHandler {
 				}
 			}
 		}
+		// Note that variable references cannot be handled like this, as they can be (and are) removed  if their value
+		// is known every time they are references (but this value can change), e.g., a:= 1; b := a + 2; a := 3; b := a + 4;
 	}
 	
 	protected void removeCoveredProperties2(Collection<? extends CommentableStateFormula> formulas) {
@@ -505,6 +524,30 @@ public class VerificationHandler extends TaskHandler {
 		verification.getQueryFiles().replaceAll(it -> fileUtil.exploreRelativeFile(file, it).toString());
 		// Setting the timeout
 		this.timeout = verification.getTimeout();
+	}
+	
+	protected AbstractVerification getVerification(Verification verification) {
+		Set<AnalysisLanguage> languagesSet = new LinkedHashSet<AnalysisLanguage>(
+				verification.getAnalysisLanguages());
+		AnalysisLanguage analysisLanguage = javaUtil.getLast(languagesSet);
+		return getVerification(analysisLanguage);
+	}
+
+	protected AbstractVerification getVerification(AnalysisLanguage analysisLanguage) {
+		switch (analysisLanguage) {
+			case UPPAAL:
+				return UppaalVerification.INSTANCE;
+			case THETA:
+				return ThetaVerification.INSTANCE;
+			case XSTS_UPPAAL:
+				return XstsUppaalVerification.INSTANCE;
+			case PROMELA:
+				return PromelaVerification.INSTANCE;
+			case NUXMV:
+				return NuxmvVerification.INSTANCE;
+			default:
+				throw new IllegalArgumentException(analysisLanguage + " is not supported");
+		}
 	}
 	
 	//

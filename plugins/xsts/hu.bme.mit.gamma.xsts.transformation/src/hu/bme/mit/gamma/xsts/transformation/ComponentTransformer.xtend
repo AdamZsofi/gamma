@@ -402,6 +402,18 @@ class ComponentTransformer {
 						thenAction.actions += xStsInEventVariable.createAssignmentAction(
 								createTrueExpression)
 					}
+					//// Optimization: if the control specification is 'when any / run' then all other inputs are known to be false
+					if (adapterComponentType.whenAnyRunOnce) {
+						val inputPorts = adapterComponentType.allPortsWithInput
+						for (inputPort : inputPorts) {
+							for (inputEvent : inputPort.inputEvents) {
+								val xStsFalseInEventVariables = eventReferenceMapper.getInputEventVariables(inputEvent, inputPort)
+										.reject[xStsInEventVariables.contains(it)]
+								thenAction.actions += xStsFalseInEventVariables.map[it.createVariableResetAction] // 'Assume' would be better?
+							}
+						}
+					}
+					////
 					// Setting the parameter variables with values stored in slave queues
 					val slaveQueueStructs = if (eventReference instanceof Entry<?, ?>) {
 						val portEvent = eventReference as Entry<Port, Event>
@@ -779,12 +791,14 @@ class ComponentTransformer {
 		mergedClockAction.actions += mergedAction
 		
 		// Replacing invariants if any (otherwise, they remain in the body of the if, not affecting the state if there are no input messages)
+		// Modification: not for environmental ones, as the replacement of these invariants would not affect variable (event) values in the correct place!
+		// Not a restrictive-enough solution for AA though as input events can be sent this way if there is an event in a prioritized queue
 		val assumeActions = mergedAction.getSelfAndAllContentsOfType(AssumeAction)
-		val environmentalInvariants = assumeActions.filter[it.environmentalInvariant]
-		for (environmentalInvariant : environmentalInvariants) {
-			createEmptyAction.replace(environmentalInvariant)
-			mergedClockAction.actions.add(0, environmentalInvariant)
-		}
+//		val environmentalInvariants = assumeActions.filter[it.environmentalInvariant]
+//		for (environmentalInvariant : environmentalInvariants) {
+//			createEmptyAction.replace(environmentalInvariant)
+//			mergedClockAction.actions.add(0, environmentalInvariant)
+//		}
 		val internalInvariants = assumeActions.filter[it.internalInvariant]
 		for (internalInvariant : internalInvariants) {
 			createEmptyAction.replace(internalInvariant)
@@ -1087,6 +1101,8 @@ class ComponentTransformer {
 			val storedEvents = messageQueue.storedEvents
 			val min = messageQueue.minEventId
 			val max = messageQueue.maxEventId
+			val allXStsInputEventVariables = storedEvents
+					.map[it.value.getInputEventVariables(it.key)].flatten.toList
 			
 			val randomActions = createChoiceActionForRandomValues(
 					messageQueue.name + "_" + messageQueue.hashCode.abs, min, max + 1 /* exclusive */)
@@ -1110,11 +1126,16 @@ class ComponentTransformer {
 					removableBranchActions += branchAction // The input event is unused
 				}
 				else {
-					// Can be more than one - one port can be mapped to multiple instance ports
+					// Setting the "unselected" events to false; needed to make it explicit for SMV iVARs
+					branchAction.appendToAction(
+						allXStsInputEventVariables
+							.reject[xStsInputEventVariables.contains(it)].toList
+							.createVariableResetActions)
+					// Maybe more than one event variable - one port can be mapped to multiple instance ports
 					// Can be empty if it is a control port
 					for (xStsInputEventVariable : xStsInputEventVariables) {
 						branchAction.appendToAction(xStsInputEventVariable
-							.createAssignmentAction(createTrueExpression))
+								.createAssignmentAction(createTrueExpression))
 					}
 				}
 			}
