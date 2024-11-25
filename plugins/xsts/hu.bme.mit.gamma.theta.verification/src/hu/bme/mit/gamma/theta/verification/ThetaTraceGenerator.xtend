@@ -51,11 +51,7 @@ class ThetaTraceGenerator {
 		cleanFolder(traceDir)
 		val jar = System.getenv(ENVIRONMENT_VARIABLE_FOR_THETA_JAR)
 		var command = #["java", "-jar", jar] +
-			#["--stacktrace", "--tracegen", "--search", "DFS", "--model", modelFile.canonicalPath, "--property",
-				modelFile.canonicalPath] // essential arguments are --tracegen, -- model and --property
-		if (fullTraces) {
-			command = command + #["--get-full-traces"]
-		}
+			#["TRACEGEN", "--stacktrace", "--model", modelFile.canonicalPath, "--generate-traces", "--trace-dir", traceDir.absolutePath]
 		if (useAbstraction) {
 			val varListFile = new File(modelFile.parent + File.separator + "variableList.txt")
 			varListFile.createNewFile()
