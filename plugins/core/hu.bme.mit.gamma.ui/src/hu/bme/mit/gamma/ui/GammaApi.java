@@ -159,19 +159,21 @@ public class GammaApi {
 									logger.info("The code generation has been finished");
 								}
 								else if (task instanceof AnalysisModelTransformation) {
-									logger.info("The analyis transformation has been started");
 									AnalysisModelTransformation analysisModelTransformation = (AnalysisModelTransformation) task;
 									// Maybe different classes should be created for distinction?
 									if (GenmodelDerivedFeatures.isVerifyAnalysisTask(analysisModelTransformation)) {
+										logger.info("The analysis transformation and verification has been started");
 										AnalysisModelTransformationAndVerificationHandler handler =
 													new AnalysisModelTransformationAndVerificationHandler(file);
 										handler.execute(analysisModelTransformation);
+										logger.info("The analysis transformation and verification has been finished");
 									}
 									else {
+										logger.info("The analysis transformation has been started");
 										AnalysisModelTransformationHandler handler = new AnalysisModelTransformationHandler(file);
 										handler.execute(analysisModelTransformation);
+										logger.info("The analysis transformation has been finished");
 									}
-									logger.info("The analysis transformation has been finished");
 								}
 								else if (task instanceof TestGeneration) {
 									logger.info("The test generation has been started");

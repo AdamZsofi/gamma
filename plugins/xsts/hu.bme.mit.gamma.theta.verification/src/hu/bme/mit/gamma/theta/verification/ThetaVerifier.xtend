@@ -85,7 +85,7 @@ class ThetaVerifier extends AbstractVerifier {
 			}
 			command +=
 				#["--model", modelFile.canonicalPath, "--property", queryFile.canonicalPath,
-					"--cex", traceFile.canonicalPath, "--stacktrace"]
+					"--cexfile", traceFile.canonicalPath, "--stacktrace"]
 			// Executing the command
 			logger.info("Executing command: " + command.join(" "))
 			val jarParent = (new File(jar)).parent
@@ -147,7 +147,7 @@ class ThetaVerifier extends AbstractVerifier {
 	
 	def getTraceFile(File modelFile) {
 		// Thread.currentThread.name is needed to prevent race conditions
-		return modelFile.parent + File.separator + modelFile.extensionlessName.toHiddenFileName +
+		return modelFile.parent + File.separator + "theta-traces" + File.separator + modelFile.extensionlessName.toHiddenFileName +
 			"-" + Thread.currentThread.name + ".cex"
 	}
 	
