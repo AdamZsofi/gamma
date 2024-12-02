@@ -23,6 +23,7 @@ import java.util.List
 import java.util.Scanner
 import java.util.logging.Level
 import java.util.logging.Logger
+import java.util.concurrent.TimeUnit
 
 class ThetaTraceGenerator {
 
@@ -37,16 +38,16 @@ class ThetaTraceGenerator {
 	protected final Logger logger = Logger.getLogger("GammaLogger")
 
 	def List<ExecutionTrace> execute(File modelFile, boolean fullTraces, List<String> variableList,
-			boolean noTransitionCoverage, boolean useAbstraction) {
+			boolean noTransitionCoverage, boolean useAbstraction, long timeout, TimeUnit timeunit) {
 		val packageFileName = modelFile.name.unfoldedPackageFileName
 		val gammaPackage = ecoreUtil.normalLoad(modelFile.parent, packageFileName)
 
 		return generateTraces(gammaPackage, modelFile, fullTraces, variableList,
-				noTransitionCoverage, useAbstraction)
+				noTransitionCoverage, useAbstraction, timeout, timeunit)
 	}
 
 	private def List<ExecutionTrace> generateTraces(Object traceability, File modelFile,
-			boolean fullTraces, List<String> variableList, boolean noTransitionCoverage, boolean useAbstraction) {
+			boolean fullTraces, List<String> variableList, boolean noTransitionCoverage, boolean useAbstraction, long timeout, TimeUnit timeunit) {
 		val traceDir = new File(modelFile.parent + File.separator + "theta-traces" + File.separator)
 		cleanFolder(traceDir)
 		val jar = System.getenv(ENVIRONMENT_VARIABLE_FOR_THETA_JAR)
@@ -71,7 +72,19 @@ class ThetaTraceGenerator {
 
 		logger.log(Level.INFO, "Executing command: " + command.join(" "))
 		val jarParent = (new File(jar)).parent
+		
 		process = Runtime.getRuntime().exec(command, #[ "LD_LIBRARY_PATH="+jarParent ] )
+		
+		 // Set a timeout for the process
+	    val completed = process.waitFor(timeout, timeunit); // Timeout of 60 seconds
+	    if (!completed) {
+	        // Kill the process if it exceeds the timeout
+	        logger.log(Level.WARNING, "Process timed out, terminating the process.")
+	        process.destroyForcibly()
+	        logger.log(Level.WARNING, "Trace generation did not terminate within timeout.")
+	        return null
+	    }
+				
 		val outputStream = process.inputStream
 		var resultReader = new Scanner(outputStream)
 		var line = ""

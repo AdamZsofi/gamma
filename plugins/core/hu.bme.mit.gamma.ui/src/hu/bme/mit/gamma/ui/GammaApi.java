@@ -192,7 +192,7 @@ public class GammaApi {
 									}
 									else {
 										VerificationHandler handler = new VerificationHandler(file);
-										handler.execute(verification);
+										handler.execute(verification, true);
 									}
 									logger.info("The verification has been finished");
 								}

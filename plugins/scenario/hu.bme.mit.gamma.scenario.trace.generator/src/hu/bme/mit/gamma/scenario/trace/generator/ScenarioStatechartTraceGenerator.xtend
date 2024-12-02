@@ -40,6 +40,7 @@ import java.util.ArrayList
 import java.util.List
 
 import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
+import java.util.concurrent.TimeUnit
 
 class ScenarioStatechartTraceGenerator {
 
@@ -165,7 +166,7 @@ class ScenarioStatechartTraceGenerator {
 	def List<ExecutionTrace> deriveTracesWithBuiltIn(String targetStateName, Component component, File xStsFile){
 		val derivedTraces = new ArrayList<ExecutionTrace>();
 		val ttg = new ThetaTraceGenerator()
-		derivedTraces += ttg.execute(xStsFile, true, <String>newArrayList, false, false)
+		derivedTraces += ttg.execute(xStsFile, true, <String>newArrayList, false, false, -1, TimeUnit.MILLISECONDS)
 		val traces = <ExecutionTrace>newArrayList	
 		var i = 0
 		val containingPackage = component.containingPackage

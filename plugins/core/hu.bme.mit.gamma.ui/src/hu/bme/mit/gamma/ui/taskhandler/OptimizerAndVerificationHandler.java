@@ -12,7 +12,9 @@ package hu.bme.mit.gamma.ui.taskhandler;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import org.eclipse.core.resources.IFile;
@@ -184,6 +187,10 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 		verificationHandler = new VerificationHandler(file, false);
 		//
 		int i = 0; // Only for logging
+		
+		// Record start time
+    	long startTime = System.currentTimeMillis();
+		
 		while (!formulas.isEmpty()) {
 			CommentableStateFormula formula = formulas.poll();
 			checkableFormulas.clear();
@@ -282,13 +289,36 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 			}
 			logger.info("The verification of property " + ++i + " finished; " + formulas.size() + " remaining");
 		}
-		
+				
 		if (isOptimize) {
 			// Traces have not been serialized yet, doing it now
 			verificationHandler.optimizeTraces();
 		}
     
-		ProgrammingLanguage programmingLanguage = verificationHandler.getProgrammingLanguage();
+		// Record end time
+    	long endTime = System.currentTimeMillis();
+		// Calculate execution time
+	    long timeSpentMillis = endTime - startTime;
+	    logger.log(Level.INFO, "Verification process completed in " + timeSpentMillis + " milliseconds.");
+	    
+	    // Write time and trace count to a file in the target folder
+	    File reportFile = new File(analysisFile.getParent(), "gamma-report.txt");
+	    // Ensure the file exists or is created
+	    if (!reportFile.exists()) {
+	        if (reportFile.createNewFile()) {
+	            logger.log(Level.INFO, "Report file created: " + reportFile.getAbsolutePath());
+	        } else {
+	            logger.log(Level.WARNING, "Failed to create report file: " + reportFile.getAbsolutePath());
+	        }
+	    }
+	    try (BufferedWriter writer = new BufferedWriter(new FileWriter(reportFile))) {
+	        writer.write("Execution Time (ms): " + timeSpentMillis);
+	        writer.newLine();
+	        writer.write("Number of Traces: " + verificationHandler.traces.size());
+	        writer.newLine();
+	    }
+	    
+	    ProgrammingLanguage programmingLanguage = verificationHandler.getProgrammingLanguage();
 		if (serializeTraces) {
 			verificationHandler.serializeTraces(programmingLanguage); // Serialization in one pass
 		}

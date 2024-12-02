@@ -12,7 +12,9 @@ package hu.bme.mit.gamma.ui.taskhandler;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +27,7 @@ import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import org.eclipse.core.resources.IFile;
@@ -151,6 +154,10 @@ public class VerificationHandler extends TaskHandler {
 	//
 	
 	public void execute(Verification verification) throws IOException, InterruptedException {
+		execute(verification, false);
+	}
+
+	public void execute(Verification verification, boolean writeReport) throws IOException, InterruptedException {
 		// Setting target folder
 		setProjectLocation(verification); // Before the target folder
 		setTargetFolder(verification);
@@ -272,6 +279,9 @@ public class VerificationHandler extends TaskHandler {
 							verificationTask.getDefaultArguments(modelFile)) :
 					verificationArguments.toArray(new String[verificationArguments.size()]);
 		
+		// Record start time
+    	long startTime = System.currentTimeMillis();			
+    	
 		// Execution
 		while (!formulaQueue.isEmpty()) {
 			Entry<String, StateFormula> formula = formulaQueue.poll();
@@ -332,6 +342,31 @@ public class VerificationHandler extends TaskHandler {
 		}
 		
 		traces.addAll(retrievedTraces);
+		
+		if(writeReport) {
+			// Record end time
+	    	long endTime = System.currentTimeMillis();
+			// Calculate execution time
+		    long timeSpentMillis = endTime - startTime;
+		    logger.log(Level.INFO, "Verification process completed in " + timeSpentMillis + " milliseconds.");
+	
+		    // Write time and trace count to a file in the target folder
+		    File reportFile = new File(modelFile.getParent(), "gamma-report.txt");
+		    // Ensure the file exists or is created
+		    if (!reportFile.exists()) {
+		        if (reportFile.createNewFile()) {
+		            logger.log(Level.INFO, "Report file created: " + reportFile.getAbsolutePath());
+		        } else {
+		            logger.log(Level.WARNING, "Failed to create report file: " + reportFile.getAbsolutePath());
+		        }
+		    }
+		    try (BufferedWriter writer = new BufferedWriter(new FileWriter(reportFile))) {
+		        writer.write("Execution Time (ms): " + timeSpentMillis);
+		        writer.newLine();
+		        writer.write("Number of Traces: " + traces.size());
+		        writer.newLine();
+		    }
+		}
 		
 		if (serializeTraces) { // After 'traces.add...'
 			serializeTraces(programmingLanguage);
