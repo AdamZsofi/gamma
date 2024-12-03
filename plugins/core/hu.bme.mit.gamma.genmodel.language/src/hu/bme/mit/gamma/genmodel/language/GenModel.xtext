@@ -352,6 +352,7 @@ Verification returns Verification:
 TraceGeneration returns TraceGeneration: // Generate all traces with Theta
 	{TraceGeneration} 'trace-generation' '{'
 		(
+			'trace-folder' ':' targetFolder+=STRING | // Trace folder
 			'file' ':' fileName+=STRING |
 			variableLists+='variables' ':'	'{'
 				(
@@ -359,7 +360,8 @@ TraceGeneration returns TraceGeneration: // Generate all traces with Theta
 				)*
 			'}'	|
 			'fullTraces' ':' fullTraces=BOOLEAN |
-			'noTransitionCoverage' ':' noTransitionCoverage=BOOLEAN
+			'noTransitionCoverage' ':' noTransitionCoverage=BOOLEAN |
+			'timeout' ':' timeout=TimeSpecification
 		)*
 	'}'
 ;

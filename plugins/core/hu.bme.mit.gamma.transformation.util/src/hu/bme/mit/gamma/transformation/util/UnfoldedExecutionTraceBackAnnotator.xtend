@@ -67,8 +67,8 @@ class UnfoldedExecutionTraceBackAnnotator {
 	
 	new(ExecutionTrace trace, Component originalTopComponent) {
 		checkNotNull(originalTopComponent)
-		checkArgument(!originalTopComponent.statechart,
-			"The original component cannot be a statechart")
+		//checkArgument(!originalTopComponent.statechart,
+		//	"The original component cannot be a statechart")
 		this.trace = trace
 		this.originalTopComponent = originalTopComponent
 	}

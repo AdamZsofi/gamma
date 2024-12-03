@@ -87,10 +87,11 @@ class ThetaVerifier extends AbstractVerifier {
 			}
 			command +=
 				#["--model", modelFile.canonicalPath, "--property", queryFile.canonicalPath,
-					"--cex", traceFile.canonicalPath, "--stacktrace"]
+					"--cexfile", traceFile.canonicalPath, "--stacktrace"]
 			// Executing the command
 			logger.info("Executing command: " + command.join(" "))
-			process = Runtime.getRuntime().exec(command)
+			val jarParent = (new File(jar)).parent
+			process = Runtime.getRuntime().exec(command, #[ "LD_LIBRARY_PATH="+jarParent ])
 			
 			val outputStream = process.inputStream
 			resultReader = new Scanner(outputStream)
@@ -148,8 +149,8 @@ class ThetaVerifier extends AbstractVerifier {
 	
 	def getTraceFile(File modelFile) {
 		// Thread.currentThread.name is needed to prevent race conditions
-		return modelFile.parent + File.separator + THETA_TEMPORARY_CEX_FOLDER + File.separator +
-				modelFile.extensionlessName + "-" + Thread.currentThread.name + ".cex"
+		return modelFile.parent + File.separator + "theta-traces" + File.separator + modelFile.extensionlessName.toHiddenFileName +
+			"-" + Thread.currentThread.name + ".cex"
 	}
 	
 	override getHelpCommand() {

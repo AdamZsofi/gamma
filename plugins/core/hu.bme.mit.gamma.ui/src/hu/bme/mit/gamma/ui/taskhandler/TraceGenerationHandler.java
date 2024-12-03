@@ -10,11 +10,14 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.ui.taskhandler;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import org.eclipse.core.resources.IFile;
@@ -25,6 +28,8 @@ import com.google.gson.GsonBuilder;
 
 import hu.bme.mit.gamma.genmodel.model.TraceGeneration;
 import hu.bme.mit.gamma.property.util.PropertyUtil;
+import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
+import hu.bme.mit.gamma.statechart.interface_.TimeSpecification;
 import hu.bme.mit.gamma.theta.verification.ThetaTraceGenerator;
 import hu.bme.mit.gamma.trace.model.ExecutionTrace;
 import hu.bme.mit.gamma.trace.util.TraceUtil;
@@ -41,6 +46,8 @@ public class TraceGenerationHandler extends TaskHandler {
 	protected String svgFileName; // Set in setVerification
 	protected final String traceFileName = "ExecutionTrace";
 	protected final String testFileName = traceFileName + "Simulation";
+
+	protected TimeSpecification timeout = null;
 	
 	//
 	
@@ -60,7 +67,12 @@ public class TraceGenerationHandler extends TaskHandler {
 	public void execute(TraceGeneration traceGeneration) throws IOException {
 		setTargetFolder(traceGeneration);
 		
-		File targetFolder = new File(targetFolderUri + File.separator + file.getName().split("\\.")[0] + File.separator);
+		// Setting the timeout
+		this.timeout = traceGeneration.getTimeout();
+		
+		File targetFolder = new File(targetFolderUri + File.separator + file.getName().split("\\.")[0] + File.separator + traceGeneration.getFileName().get(0).split("\\.")[0] + File.separator);
+
+		logger.log(Level.INFO, targetFolder.getAbsolutePath());
 		if (targetFolder.exists()) {
 			cleanFolder(targetFolder);			
 		} else {
@@ -68,6 +80,7 @@ public class TraceGenerationHandler extends TaskHandler {
 		}
 		
 		// Based on the method setVerification in VerificationHandler
+		boolean fullTraces = traceGeneration.isFullTraces();
 		Resource resource = traceGeneration.eResource();
 		File file = (resource != null) ?
 				ecoreUtil.getFile(resource).getParentFile() : // If Verification is contained in a resource
@@ -78,21 +91,59 @@ public class TraceGenerationHandler extends TaskHandler {
 		List<String> variableList = traceGeneration.getVariables();
 		boolean useAbstraction = traceGeneration.getVariableLists().size() != 0;
 		
-		boolean fullTraces = traceGeneration.isFullTraces();
 		boolean noTransitionCoverage = traceGeneration.isNoTransitionCoverage();
 		String filePath = traceGeneration.getFileName().get(0);
-		File modelFile = new File(filePath);		
+		File modelFile = new File(filePath);
 		List<ExecutionTrace> retrievedTraces = new ArrayList<ExecutionTrace>();
 		ThetaTraceGenerator ttg = new ThetaTraceGenerator();
-		retrievedTraces = ttg.execute(modelFile, fullTraces, variableList, noTransitionCoverage, useAbstraction);
-		logger.log(Level.INFO, "Number of received traces: " + retrievedTraces.size());
+		
+		long timeoutInMilliseconds = (timeout == null) ? -1 : expressionEvaluator.evaluateInteger(
+				StatechartModelDerivedFeatures.getTimeInMilliseconds(timeout));
+		
+		// Record start time
+    	long startTime = System.currentTimeMillis();
+		
+		retrievedTraces = ttg.execute(modelFile, fullTraces, variableList, noTransitionCoverage, useAbstraction, timeoutInMilliseconds, TimeUnit.MILLISECONDS);
+		
+		// Record end time
+    	long endTime = System.currentTimeMillis();
+		// Calculate execution time
+	    long timeSpentMillis = endTime - startTime;
+	    logger.log(Level.INFO, "Process completed in " + timeSpentMillis + " milliseconds.");
 
-		for (ExecutionTrace trace : retrievedTraces) {
+	    long traceNum = 0;
+	    if(retrievedTraces==null) {
+		    logger.log(Level.INFO, "Number of received traces: 0");	    	
+	    } else {
+	    	traceNum = retrievedTraces.size();
+		    logger.log(Level.INFO, "Number of received traces: " + traceNum);	    	
+	    }
+		
+	    if(retrievedTraces!=null) {
+	    	for (ExecutionTrace trace : retrievedTraces) {
 			serializer.serialize(targetFolder.getAbsolutePath(), traceFileName, svgFileName,
 					testFolderUri, testFileName, "", trace);
-		}
-		traces.addAll(retrievedTraces);
-		System.err.println(traces.size());
+	    	}
+		
+	    	traces.addAll(retrievedTraces);
+
+	    }
+	    // Write time and trace count to a file in the target folder
+	    File reportFile = new File(modelFile.getParent(), "gamma-report.txt");
+	    // Ensure the file exists or is created
+	    if (!reportFile.exists()) {
+	        if (reportFile.createNewFile()) {
+	            logger.log(Level.INFO, "Report file created: " + reportFile.getAbsolutePath());
+	        } else {
+	            logger.log(Level.WARNING, "Failed to create report file: " + reportFile.getAbsolutePath());
+	        }
+	    }
+	    try (BufferedWriter writer = new BufferedWriter(new FileWriter(reportFile))) {
+	        writer.write("Execution Time (ms): " + timeSpentMillis);
+	        writer.newLine();
+	        writer.write("Number of Traces: " + traceNum);
+	        writer.newLine();
+	    }
 	}
 
 	public static void cleanFolder(File folder) {
