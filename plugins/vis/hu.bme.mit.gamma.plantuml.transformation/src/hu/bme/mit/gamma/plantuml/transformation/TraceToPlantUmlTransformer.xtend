@@ -10,7 +10,7 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.plantuml.transformation
 
-import hu.bme.mit.gamma.statechart.util.ExpressionSerializer
+import hu.bme.mit.gamma.plantuml.serialization.ExpressionSerializer
 import hu.bme.mit.gamma.trace.model.ComponentSchedule
 import hu.bme.mit.gamma.trace.model.ExecutionTrace
 import hu.bme.mit.gamma.trace.model.InstanceSchedule

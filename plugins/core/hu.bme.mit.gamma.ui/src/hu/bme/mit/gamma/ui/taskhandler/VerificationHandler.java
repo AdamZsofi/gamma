@@ -46,6 +46,7 @@ import hu.bme.mit.gamma.genmodel.model.GenmodelModelFactory;
 import hu.bme.mit.gamma.genmodel.model.ProgrammingLanguage;
 import hu.bme.mit.gamma.genmodel.model.TestGeneration;
 import hu.bme.mit.gamma.genmodel.model.Verification;
+import hu.bme.mit.gamma.iml.verification.ImlVerification;
 import hu.bme.mit.gamma.nuxmv.verification.NuxmvVerification;
 import hu.bme.mit.gamma.plantuml.serialization.SvgSerializer;
 import hu.bme.mit.gamma.plantuml.transformation.TraceToPlantUmlTransformer;
@@ -56,6 +57,7 @@ import hu.bme.mit.gamma.property.model.PropertyPackage;
 import hu.bme.mit.gamma.property.model.StateFormula;
 import hu.bme.mit.gamma.property.util.PropertyUtil;
 import hu.bme.mit.gamma.querygenerator.serializer.AbstractReferenceSerializer;
+import hu.bme.mit.gamma.querygenerator.serializer.ImlPropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.NuxmvPropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.PromelaPropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.PropertySerializer;
@@ -194,6 +196,10 @@ public class VerificationHandler extends TaskHandler {
 				case NUXMV:
 					verificationTask = NuxmvVerification.INSTANCE;
 					propertySerializer = NuxmvPropertySerializer.INSTANCE;
+					break;
+				case IML:
+					verificationTask = ImlVerification.INSTANCE;
+					propertySerializer = ImlPropertySerializer.INSTANCE;
 					break;
 				default:
 					throw new IllegalArgumentException(analysisLanguage + " is not supported");
@@ -580,6 +586,8 @@ public class VerificationHandler extends TaskHandler {
 				return PromelaVerification.INSTANCE;
 			case NUXMV:
 				return NuxmvVerification.INSTANCE;
+			case IML:
+				return ImlVerification.INSTANCE;
 			default:
 				throw new IllegalArgumentException(analysisLanguage + " is not supported");
 		}

@@ -28,7 +28,7 @@ class GammaFileNamer {
 	
 	public static final String PROPERTY_XTEXT_EXTENSION = "gpd";
 	public static final String PROPERTY_EMF_EXTENSION = "gpm";
-	public static final String PROPERTY_SERIALIZED_EXTENSION = "pd"; // Both UPPAAL and Theta
+	public static final String PROPERTY_SERIALIZED_EXTENSION = "pd"; // For every backend
 	
 	public static final String EXECUTION_XTEXT_EXTENSION = "get";
 	public static final String EXECUTION_EMF_EXTENSION = "gtr";
@@ -47,6 +47,8 @@ class GammaFileNamer {
 	public static final String NUXMV_MODEL_EXTENSION = "smv";
 	
 	public static final String OCRA_MODEL_EXTENSION = "oss";
+	
+	public static final String IML_MODEL_EXTENSION = "iml";
 	
 	public static final String UPPAAL_QUERY_EXTENSION = "q";
 	public static final String THETA_QUERY_EXTENSION = "prop";
@@ -88,6 +90,8 @@ class GammaFileNamer {
 	
 	def String getOcraFileName(String fileName) '''«fileName.extensionlessName».«OCRA_MODEL_EXTENSION»'''
 	
+	def String getImlImandraFileName(String fileName) '''«fileName.extensionlessName».«IML_MODEL_EXTENSION»'''
+	
 	//
 	
 	def String getUnfoldedPackageUri(String uri) '''«uri.parent»«File.separator»«uri.fileName.unfoldedPackageFileName»'''
@@ -123,6 +127,9 @@ class GammaFileNamer {
 			case "OCRA": {
 				return OCRA_MODEL_EXTENSION
 			}
+			case "IMANDRA", case "IML": {
+				return IML_MODEL_EXTENSION
+			}
 			default:
 				throw new IllegalArgumentException("Not known language: " + analysisLanguage)
 		}
@@ -145,6 +152,9 @@ class GammaFileNamer {
 			}
 			case "OCRA", case "OSS", case "OTHELLO": {
 				return "Ocra"
+			}
+			case "IMANDRA", case "IML": {
+				return "Imandra"
 			}
 			default:
 				throw new IllegalArgumentException("Not known language: " + analysisLanguage)

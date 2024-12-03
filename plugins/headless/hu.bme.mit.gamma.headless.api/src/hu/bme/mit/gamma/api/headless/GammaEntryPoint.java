@@ -1,3 +1,13 @@
+/********************************************************************************
+ * Copyright (c) 2024 Contributors to the Gamma project
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * SPDX-License-Identifier: EPL-1.0
+ ********************************************************************************/
 package hu.bme.mit.gamma.api.headless;
 
 import java.io.File;
@@ -32,8 +42,10 @@ import com.google.inject.Injector;
 
 import hu.bme.mit.gamma.action.language.ActionLanguageStandaloneSetup;
 import hu.bme.mit.gamma.expression.language.ExpressionLanguageStandaloneSetup;
+import hu.bme.mit.gamma.fei.language.FaultExtensionLanguageStandaloneSetup;
 import hu.bme.mit.gamma.genmodel.language.GenModelStandaloneSetup;
 import hu.bme.mit.gamma.property.language.PropertyLanguageStandaloneSetup;
+import hu.bme.mit.gamma.scenario.language.ScenarioLanguageStandaloneSetup;
 import hu.bme.mit.gamma.statechart.language.StatechartLanguageStandaloneSetup;
 import hu.bme.mit.gamma.statechart.language.StatechartLanguageStandaloneSetupGenerated;
 import hu.bme.mit.gamma.trace.language.TraceLanguageStandaloneSetup;
@@ -53,19 +65,20 @@ public class GammaEntryPoint extends HeadlessApplicationCommandHandler {
 
 	@Override
 	public void execute() throws Exception {
-		
-		//necessary setups
+		// Necessary setup of Xtext parsers
 		ExpressionLanguageStandaloneSetup.doSetup();
 		ActionLanguageStandaloneSetup.doSetup();
 		StatechartLanguageStandaloneSetup.doSetup();
 		TraceLanguageStandaloneSetup.doSetup();
 		PropertyLanguageStandaloneSetup.doSetup();
+		ScenarioLanguageStandaloneSetup.doSetup();
+		FaultExtensionLanguageStandaloneSetup.doSetup();
 		GenModelStandaloneSetup.doSetup();
-
+		
 		if (appArgs.length >= 1) { // Checking the length of arguments. These are passed by the web server.
 			String ggenFilePath = URI.decode(appArgs[2]); // Path of the .ggen file to be executed
 			File ggenFile = new File(ggenFilePath);
-			String projectDescriptorPath = URI.decode(appArgs[3]); // Path of the projectDescriptor.json
+			String projectDescriptorPath = (appArgs.length >= 4) ? URI.decode(appArgs[3]) : null; // Path of the projectDescriptor.json
 			File projectFolder = getContainingProject(ggenFile);
 			String projectName = projectFolder.getName();
 			String fileWorkspaceRelativePath = ggenFilePath.substring(projectFolder.getParent().length());
@@ -119,8 +132,7 @@ public class GammaEntryPoint extends HeadlessApplicationCommandHandler {
 					return resourceSet;
 				}
 			});
-			// Commented due to repeatedly throwing exceptions. The application works
-			// without it.
+			// Commented due to repeatedly throwing exceptions. The application works without it.
 			// workspace.save(true, progressMonitor);
 
 			beforeExitOperation(projectDescriptorPath);
@@ -171,13 +183,15 @@ public class GammaEntryPoint extends HeadlessApplicationCommandHandler {
 	}
 
 	private void beforeExitOperation(String projectDescriptorPath) {
-		File descriptor = new File(projectDescriptorPath);
-		if (descriptor != null) {
-			try {
-				logger.log(Level.INFO, "ENDING");
-				updateUnderOperationStatus(descriptor.getPath());
-			} catch (IOException e) {
-				e.printStackTrace();
+		if (projectDescriptorPath != null) {
+			File descriptor = new File(projectDescriptorPath);
+			if (descriptor.exists()) {
+				try {
+					logger.info("Updating project status");
+					updateUnderOperationStatus(descriptor.getPath());
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
 		}
 	}
@@ -194,9 +208,7 @@ public class GammaEntryPoint extends HeadlessApplicationCommandHandler {
 			Gson gson = new Gson();
 			String resultingJson = gson.toJson(jElement);
 			FileUtil.INSTANCE.saveString(jsonFile, resultingJson);
-
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}

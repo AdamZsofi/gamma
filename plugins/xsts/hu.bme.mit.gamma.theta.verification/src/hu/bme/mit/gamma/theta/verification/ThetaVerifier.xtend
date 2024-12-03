@@ -29,6 +29,8 @@ class ThetaVerifier extends AbstractVerifier {
 	
 	final String SAFE = "SafetyResult Safe"
 	final String UNSAFE = "SafetyResult Unsafe"
+	
+	final String THETA_TEMPORARY_CEX_FOLDER = ".theta"
 	//
 	
 	override Result verifyQuery(Object traceability, String parameters, File modelFile, String queries) {

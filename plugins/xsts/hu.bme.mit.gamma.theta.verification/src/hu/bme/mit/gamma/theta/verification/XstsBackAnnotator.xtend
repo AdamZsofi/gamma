@@ -40,7 +40,8 @@ class XstsBackAnnotator {
 	protected final Component component
 	protected final ThetaQueryGenerator xStsQueryGenerator
 	protected final extension XstsArrayParser arrayParser
-	
+	//
+	protected final String SCHEDULING_VARIABLE_PREFIX
 	//
 	protected final Set<Pair<Port, Event>> storedAsynchronousInEvents = newHashSet
 	
@@ -52,16 +53,21 @@ class XstsBackAnnotator {
 	protected final extension TraceBuilder traceBuilder = TraceBuilder.INSTANCE
 	protected final extension GammaEcoreUtil gammaEcoreUtil = GammaEcoreUtil.INSTANCE
 	
-	new(ThetaQueryGenerator thetaQueryGenerator, XstsArrayParser arrayParser) {
-		this.xStsQueryGenerator = thetaQueryGenerator
-		this.component = thetaQueryGenerator.component
+	new(ThetaQueryGenerator queryGenerator, XstsArrayParser arrayParser) {
+		this(queryGenerator, arrayParser, "")
+	}
+	
+	new(ThetaQueryGenerator queryGenerator, XstsArrayParser arrayParser, String schedulingVariablePrefix) {
+		this.component = queryGenerator.component
+		this.xStsQueryGenerator = queryGenerator
 		this.arrayParser = arrayParser
+		this.SCHEDULING_VARIABLE_PREFIX = schedulingVariablePrefix // E.g., _ in IML
 	}
 	
 	//
 	
 	def isSchedulingVariable(String id) {
-		return id == Namings.instanceEndcodingVariableName
+		return id == SCHEDULING_VARIABLE_PREFIX + Namings.instanceEndcodingVariableName
 	}
 	
 	def addScheduling(String id, String value, Step step) {
@@ -307,6 +313,7 @@ class XstsBackAnnotator {
 				raiseEventAct.delete
 			}
 		}
+		val asserts = step.asserts
 		val instanceStates = step.instanceStateConfigurations
 		for (instanceState : instanceStates) {
 			// A state is active if all of its ancestor states are active
@@ -317,7 +324,9 @@ class XstsBackAnnotator {
 					ancestorStateReference.region = ancestorState.parentRegion
 					ancestorStateReference.state = ancestorState
 					
-					step.asserts += ancestorStateReference
+					if (!asserts.exists[it.helperEquals(ancestorStateReference)]) { // To avoid duplication
+						asserts += ancestorStateReference
+					}
 				}
 //				instanceState.delete // Was necessary when history literals were not yet introduced
 			}

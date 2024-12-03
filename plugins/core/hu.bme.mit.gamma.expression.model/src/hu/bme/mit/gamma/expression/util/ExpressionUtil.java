@@ -49,6 +49,8 @@ import hu.bme.mit.gamma.expression.model.FalseExpression;
 import hu.bme.mit.gamma.expression.model.FieldAssignment;
 import hu.bme.mit.gamma.expression.model.FieldDeclaration;
 import hu.bme.mit.gamma.expression.model.FieldReferenceExpression;
+import hu.bme.mit.gamma.expression.model.FunctionAccessExpression;
+import hu.bme.mit.gamma.expression.model.FunctionDeclaration;
 import hu.bme.mit.gamma.expression.model.GreaterEqualExpression;
 import hu.bme.mit.gamma.expression.model.GreaterExpression;
 import hu.bme.mit.gamma.expression.model.IfThenElseExpression;
@@ -640,7 +642,7 @@ public class ExpressionUtil {
 
 	protected Expression _getInitialValueOfType(DecimalTypeDefinition type) {
 		DecimalLiteralExpression decimalLiteralExpression = factory.createDecimalLiteralExpression();
-		decimalLiteralExpression.setValue(BigDecimal.ZERO);
+		decimalLiteralExpression.setValue(BigDecimal.valueOf(0.0)); // .ZERO cannot be parsed by Xtext
 		return decimalLiteralExpression;
 	}
 
@@ -916,15 +918,40 @@ public class ExpressionUtil {
 		if (literalExpression instanceof IntegerLiteralExpression integer) {
 			return integer.getValue().intValue();
 		}
-		else if (literalExpression instanceof TrueExpression bool) {
+		else if (literalExpression instanceof TrueExpression) {
 			return 1;
 		}
-		else if (literalExpression instanceof FalseExpression bool) {
+		else if (literalExpression instanceof FalseExpression) {
 			return 0;
 		}
 		else if (literalExpression instanceof EnumerationLiteralExpression enumeration) {
 			EnumerationLiteralDefinition enumLiteral = enumeration.getReference();
 			return ecoreUtil.getIndex(enumLiteral);
+		}
+		else {
+			throw new IllegalArgumentException("Not known literal: " + literalExpression);
+		}
+	}
+	
+	public Double toDouble(LiteralExpression literalExpression) {
+		if (literalExpression instanceof IntegerLiteralExpression integer) {
+			return integer.getValue().doubleValue();
+		}
+		else if (literalExpression instanceof DecimalLiteralExpression double_) {
+			return double_.getValue().doubleValue();
+		}
+		else if (literalExpression instanceof RationalLiteralExpression rational) {
+			return rational.getNumerator().doubleValue() / rational.getDenominator().doubleValue();
+		}
+		else if (literalExpression instanceof TrueExpression) {
+			return 1.0;
+		}
+		else if (literalExpression instanceof FalseExpression) {
+			return 0.0;
+		}
+		else if (literalExpression instanceof EnumerationLiteralExpression enumeration) {
+			EnumerationLiteralDefinition enumLiteral = enumeration.getReference();
+			return (double) ecoreUtil.getIndex(enumLiteral);
 		}
 		else {
 			throw new IllegalArgumentException("Not known literal: " + literalExpression);
@@ -1077,12 +1104,62 @@ public class ExpressionUtil {
 		return first;
 	}
 	
+	public FunctionAccessExpression createFunctionAccessExpression(FunctionDeclaration function, List<? extends Expression> arguments) {
+		DirectReferenceExpression reference = createReferenceExpression(function);
+		FunctionAccessExpression callExpression = factory.createFunctionAccessExpression();
+		callExpression.setOperand(reference);
+		callExpression.getArguments().addAll(arguments);
+		return callExpression;
+	}
+	
+	public RecordAccessExpression createRecordAccessExpression(Declaration declaration, FieldDeclaration field) {
+		return createRecordAccessExpression(declaration, List.of(field));
+	}
+	
+	public RecordAccessExpression createRecordAccessExpression(Declaration declaration, Collection<? extends FieldDeclaration> fields) {
+		return createRecordAccessExpression(
+				createReferenceExpression(declaration),
+				fields.stream().map(it -> createReferenceExpression(it)).toList());
+	}
+	
+	public RecordAccessExpression createRecordAccessExpression(Expression operand, FieldReferenceExpression field) {
+		return createRecordAccessExpression(operand, List.of(field));
+	}
+	
+	public RecordAccessExpression createRecordAccessExpression(Expression operand, Iterable<? extends FieldReferenceExpression> fields) {
+		if (operand == null) { // operand.declaration can be null, though
+			throw new IllegalArgumentException("Declaration is null");
+		}
+		RecordAccessExpression recordAccess = factory.createRecordAccessExpression();
+		recordAccess.setOperand(operand);
+		
+		for (FieldReferenceExpression field : fields) {
+			if (recordAccess.getFieldReference() != null) {
+				RecordAccessExpression newRecordAccess = factory.createRecordAccessExpression();
+				newRecordAccess.setOperand(recordAccess);
+				recordAccess = newRecordAccess;
+			}
+			recordAccess.setFieldReference(field);
+		}
+		
+		return recordAccess;
+	}
+	
 	public DirectReferenceExpression createReferenceExpression(Declaration declaration) {
 		if (declaration == null) {
 			throw new IllegalArgumentException("Declaration is null");
 		}
 		DirectReferenceExpression reference = factory.createDirectReferenceExpression();
 		reference.setDeclaration(declaration);
+		return reference;
+	}
+	
+	public FieldReferenceExpression createReferenceExpression(FieldDeclaration field) {
+		if (field == null) {
+			throw new IllegalArgumentException("Declaration is null");
+		}
+		FieldReferenceExpression reference = factory.createFieldReferenceExpression();
+		reference.setFieldDeclaration(field);
 		return reference;
 	}
 	
