@@ -159,10 +159,46 @@ public class VerificationHandler extends TaskHandler {
 		execute(verification, false);
 	}
 
+	public static void cleanFolder(File folder) {
+		File[] files = folder.listFiles();
+	    if (files != null) {
+	        for (File file : files) {
+	            if (file.isDirectory()) {
+	                deleteFolder(file);
+	            } else {
+	                file.delete();
+	            }
+	        }
+	    }
+	}
+	
+	public static void deleteFolder(File folder) {
+	    File[] files = folder.listFiles();
+	    if (files!=null) {
+	        for (File file : files) {
+	            if (file.isDirectory()) {
+	                deleteFolder(file);
+	            } else {
+	                file.delete();
+	            }
+	        }
+	    }
+	    folder.delete();
+	}
+	
 	public void execute(Verification verification, boolean writeReport) throws IOException, InterruptedException {
 		// Setting target folder
 		setProjectLocation(verification); // Before the target folder
 		setTargetFolder(verification);
+		if(writeReport) {
+			File targetFolder = new File(targetFolderUri);
+			if (targetFolder.exists()) {
+				cleanFolder(targetFolder);			
+			} else {
+				targetFolder.mkdirs();
+			}
+		}
+		
 		//
 		setVerification(verification);
 		Set<AnalysisLanguage> languagesSet = new LinkedHashSet<AnalysisLanguage>(
