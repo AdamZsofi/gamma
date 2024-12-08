@@ -333,7 +333,7 @@ public class VerificationHandler extends TaskHandler {
 		}
 		
 		// Back-annotating
-		if (verification.isBackAnnotateToOriginal()) {
+		if (verification.isBackAnnotateToOriginal()) {			
 			List<ExecutionTrace> backAnnotatedTraces = new ArrayList<ExecutionTrace>();
 			for (ExecutionTrace trace : retrievedTraces) {
 				Component newComponent = trace.getComponent();

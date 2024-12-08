@@ -167,7 +167,7 @@ class TraceBackAnnotator {
 				val value = split.get(1)
 				switch (state) {
 					case STATE_CHECK: {
-						val potentialStateString = '''«id» == «value»'''
+						val potentialStateString = '''«id» == «value.substring(value.lastIndexOf('.') + 1)»'''
 						if (thetaQueryGenerator.isSourceState(potentialStateString)) {
 							potentialStateString.parseState(step)
 						}
