@@ -75,15 +75,19 @@ class ThetaTraceGenerator {
 		
 		process = Runtime.getRuntime().exec(command, #[ "LD_LIBRARY_PATH="+jarParent ] )
 		
-		 // Set a timeout for the process
-	    val completed = process.waitFor(timeout, timeunit); // Timeout of 60 seconds
-	    if (!completed) {
-	        // Kill the process if it exceeds the timeout
-	        logger.log(Level.WARNING, "Process timed out, terminating the process.")
-	        process.destroyForcibly()
-	        logger.log(Level.WARNING, "Trace generation did not terminate within timeout.")
-	        return null
-	    }
+		if(timeout!=-1) {
+			// Set a timeout for the process
+		    val completed = process.waitFor(timeout, timeunit); // Timeout
+		    if (!completed) {
+		        // Kill the process if it exceeds the timeout
+		        logger.log(Level.WARNING, "Process timed out, terminating the process.")
+		        process.destroyForcibly()
+		        logger.log(Level.WARNING, "Trace generation did not terminate within timeout.")
+		        return null
+		    }
+		} else {
+		    val completed = process.waitFor();	
+		}
 				
 		val outputStream = process.inputStream
 		var resultReader = new Scanner(outputStream)
