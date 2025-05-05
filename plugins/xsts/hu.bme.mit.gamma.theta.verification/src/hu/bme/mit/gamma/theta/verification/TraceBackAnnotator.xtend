@@ -126,7 +126,7 @@ class TraceBackAnnotator {
 						}
 						// Adding reset
 						step.actions += createReset
-						line = traceScanner.nextLine.trim
+						//line = traceScanner.nextLine.trim
 						state = BackAnnotatorState.STATE_CHECK
 					}
 					case line.startsWith(XSTS_STATE): {
@@ -156,11 +156,14 @@ class TraceBackAnnotator {
 								throw new IllegalArgumentException("Not know state: " + state)
 						}
 						// Skipping two lines
-						line = traceScanner.nextLine
+						//line = traceScanner.nextLine
 						line = traceScanner.nextLine.trim
 					}
 				}
 				// We parse in every turn
+				if (line.startsWith("(ExplState ")) {
+				    line = line.substring("(ExplState ".length)
+				}
 				line = thetaQueryGenerator.unwrapAll(line)
 				val split = line.split(" ", 2) // Only the first " " is checked
 				val id = split.get(0)

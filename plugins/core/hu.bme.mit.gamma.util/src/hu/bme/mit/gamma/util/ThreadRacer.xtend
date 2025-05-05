@@ -48,7 +48,13 @@ class ThreadRacer<T> {
 	}
 
 	new(Collection<? extends InterruptableCallable<T>> callables, long timeout, TimeUnit unit) {
-		val size = callables.size
+		// val size = callables.size
+		val threadCount = 1
+		val size = if (callables.size > threadCount) {
+			threadCount
+		} else {
+			callables.size
+		}
 		this.numberOfCallablesShouldBeRunning = size
 		
 		this.callables += callables
